@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>core-stack.ru — Infrastructure</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Bar -->
+    <nav class="topbar">
+        <div class="topbar-left">
+            <div class="logo">
+                <svg class="logo-svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" fill="currentColor" opacity="0.8"/>
+                    <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="2" fill="none" opacity="0.4"/>
+                    <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" fill="none" opacity="0.6"/>
+                </svg>
+                <span class="logo-text">core-stack<span class="logo-dot">.art</span></span>
+            </div>
+            <div class="topbar-divider"></div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="pulse-dot" id="pulse"></span>
+                <span class="connection-text" id="connectionText" data-i18n="connecting">Connecting...</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <div class="topbar-meta" id="updatedAt"></div>
+            <div class="topbar-divider"></div>
+            <!-- Language Toggle -->
+            <div class="toggle-group" id="langToggle">
+                <button class="toggle-btn active" data-lang="ru">RU</button>
+                <button class="toggle-btn" data-lang="en">EN</button>
+            </div>
+            <!-- Theme Toggle -->
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                <svg class="theme-icon sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+                <svg class="theme-icon moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Status Banner -->
+    <div class="status-banner" id="statusBanner">
+        <div class="status-banner-inner">
+            <span class="status-banner-dot"></span>
+            <span class="status-banner-text" data-i18n="status_connecting">Connecting...</span>
+            <span class="status-banner-uptime" id="bannerUptime"></span>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar">
+        <div class="tabs">
+            <button class="tab active" data-tab="overview" data-i18n="tab_overview">Overview</button>
+            <button class="tab" data-tab="hosts" data-i18n="tab_hosts">Hosts</button>
+            <button class="tab" data-tab="projects" data-i18n="tab_projects">Projects</button>
+            <button class="tab" data-tab="services" data-i18n="tab_services">Services</button>
+            <button class="tab" data-tab="domains" data-i18n="tab_domains">Domains</button>
+        </div>
+        <div class="tabs-actions">
+            <button class="edit-toggle" id="editToggle" title="Edit layout">
+                <svg class="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+                <span data-i18n="edit_layout">Edit Layout</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- OVERVIEW TAB -->
+        <div class="tab-content active" id="tab-overview">
+            <!-- Quick Stats (always on top) -->
+            <div class="quick-stats" id="quickStats">
+                <div class="stat-card">
+                    <div class="stat-value" id="statHosts">-</div>
+                    <div class="stat-label" data-i18n="stat_hosts">Hosts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statProjects">-</div>
+                    <div class="stat-label" data-i18n="stat_projects">Projects</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statServices">-</div>
+                    <div class="stat-label" data-i18n="stat_services">Services</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="statDomains">-</div>
+                    <div class="stat-label" data-i18n="stat_domains">Domains</div>
+                </div>
+                <div class="stat-card stat-ram">
+                    <div class="stat-value" id="statRAM">-</div>
+                    <div class="stat-label" data-i18n="stat_ram">Total RAM</div>
+                </div>
+            </div>
+
+            <!-- Draggable Widget Grid -->
+            <div class="widget-grid" id="widgetGrid">
+                <div class="widget" data-widget="hosts" data-size="1" draggable="false">
+                    <div class="widget-header">
+                        <span class="widget-drag-handle">&#x2630;</span>
+                        <h3 class="widget-title" data-i18n="section_hosts">Hosts</h3>
+                        <div class="widget-actions">
+                            <button class="widget-resize" title="Toggle size">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="hosts-grid" id="hostsGridOverview"></div>
+                    </div>
+                </div>
+
+                <div class="widget" data-widget="projects" data-size="1" draggable="false">
+                    <div class="widget-header">
+                        <span class="widget-drag-handle">&#x2630;</span>
+                        <h3 class="widget-title" data-i18n="section_projects">Projects</h3>
+                        <div class="widget-actions">
+                            <button class="widget-resize" title="Toggle size">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="projects-compact" id="projectsCompact"></div>
+                    </div>
+                </div>
+
+                <div class="widget" data-widget="infra" data-size="1" draggable="false">
+                    <div class="widget-header">
+                        <span class="widget-drag-handle">&#x2630;</span>
+                        <h3 class="widget-title" data-i18n="section_infra">Infrastructure</h3>
+                        <div class="widget-actions">
+                            <button class="widget-resize" title="Toggle size">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="infra-grid" id="infraGridOverview"></div>
+                    </div>
+                </div>
+
+                <div class="widget" data-widget="domains" data-size="1" draggable="false">
+                    <div class="widget-header">
+                        <span class="widget-drag-handle">&#x2630;</span>
+                        <h3 class="widget-title" data-i18n="section_domains">Domains</h3>
+                        <div class="widget-actions">
+                            <button class="widget-resize" title="Toggle size">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="domains-grid" id="domainsGridOverview"></div>
+                    </div>
+                </div>
+
+                <div class="widget" data-widget="services-table" data-size="2" draggable="false">
+                    <div class="widget-header">
+                        <span class="widget-drag-handle">&#x2630;</span>
+                        <h3 class="widget-title" data-i18n="tab_services">Services</h3>
+                        <div class="widget-actions">
+                            <button class="widget-resize" title="Toggle size">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="services-table-wrap" id="servicesTableOverview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HOSTS TAB -->
+        <div class="tab-content" id="tab-hosts">
+            <div class="hosts-grid-full" id="hostsGridFull"></div>
+        </div>
+
+        <!-- PROJECTS TAB -->
+        <div class="tab-content" id="tab-projects">
+            <div class="projects-grid-full" id="projectsGridFull"></div>
+        </div>
+
+        <!-- SERVICES TAB -->
+        <div class="tab-content" id="tab-services">
+            <div class="services-table-wrap" id="servicesTable"></div>
+        </div>
+
+        <!-- DOMAINS TAB -->
+        <div class="tab-content" id="tab-domains">
+            <div class="domains-full" id="domainsGridFull"></div>
+        </div>
+    </main>
+
+    <!-- Error Overlay -->
+    <div class="overlay" id="errorOverlay">
+        <div class="overlay-card error">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <h3 data-i18n="error_title">Connection Lost</h3>
+            <p data-i18n="error_desc">Attempting to reconnect...</p>
+            <div class="overlay-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Pause Overlay -->
+    <div class="overlay" id="pauseOverlay">
+        <div class="overlay-card pause">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>
+            </svg>
+            <h3 data-i18n="pause_title">Updates Paused</h3>
+            <p data-i18n="pause_desc">Tab is in background. Updates will resume when you return.</p>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="overlay visible" id="loadingOverlay">
+        <div class="overlay-card loading">
+            <div class="loader"></div>
+            <h3 data-i18n="loading_title">Loading Infrastructure</h3>
+            <p data-i18n="loading_desc">Collecting data from servers...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+server:
+  port: 8090
+  refresh_interval: 10s
+
+hosts:
+  - name: prox-host
+    host: 192.168.1.71
+    ssh_user: root
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: proxmox
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
+  - name: prox-dev
+    host: 192.168.1.112
+    ssh_user: dev
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: vm
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
+  - name: prox-infra
+    host: 127.0.0.1
+    ssh_user: dev
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: vm
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
+projects:
+  - name: Cargo
+    icon: truck
+    description: "Биржа грузоперевозок"
+    urls:
+      web: https://cargo.core-stack.ru
+      api: https://cargo-api.core-stack.ru
+    services:
+      system:
+        - cargo-backend
+        - cargo-sidekiq
+        - cargo-anycable-rpc
+        - anycable-go
+    host: prox-dev
+
+  - name: Fabro
+    icon: factory
+    description: "Калькуляторы для производств"
+    urls:
+      web: https://fabro.core-stack.ru
+      api: https://fabro-api.core-stack.ru
+    services:
+      user:
+        - fabro-api
+        - fabro-web
+        - fabro-sidekiq
+        - fabro-anycable-rpc
+        - fabro-anycable-go
+    host: prox-dev
+
+  - name: Puls
+    icon: heart-pulse
+    description: "Мониторинг транспорта"
+    urls:
+      web: https://puls.core-stack.ru
+      api: https://puls-api.core-stack.ru
+    services:
+      user:
+        - puls-backend
+        - puls-frontend
+    host: prox-dev
+
+  - name: e-medic
+    icon: stethoscope
+    description: "Медицинская платформа"
+    urls:
+      web: https://emedic.core-stack.ru
+      api: https://emedic-api.core-stack.ru
+    services:
+      system:
+        - emedic-api
+        - emedic-web
+        - emedic-queue
+    host: prox-dev
+
+  - name: Skazki
+    icon: book-open
+    description: "AI-генератор детских сказок"
+    urls:
+      web: https://skazki.core-stack.ru
+      api: https://skazki-api.core-stack.ru
+    services:
+      user: []
+    host: prox-dev
+
+  - name: Kraеved
+    icon: map-pin
+    description: "AI-путеводитель по России"
+    urls:
+      web: https://kraeved.core-stack.ru
+      api: https://kraeved-api.core-stack.ru
+    services:
+      user: []
+    host: prox-dev
+
+  - name: Logist23
+    icon: clipboard-list
+    description: "Управление грузоперевозками"
+    urls:
+      web: https://logist23.core-stack.ru
+      api: https://logist23-api.core-stack.ru
+    services:
+      user: []
+    host: prox-dev
+
+infrastructure:
+  - name: PostgreSQL
+    service: postgresql@16-main
+    host: prox-dev
+    port: 5432
+    level: system
+
+  - name: Redis
+    service: redis-server
+    host: prox-dev
+    port: 6379
+    level: system
+
+  - name: nginx
+    service: nginx
+    host: prox-dev
+    port: 80
+    level: system
+
+  - name: fail2ban
+    service: fail2ban
+    host: prox-dev
+    level: system
+
+  - name: SSH
+    service: ssh
+    host: prox-dev
+    port: 22
+    level: system
+
+  - name: SMB
+    service: smbd
+    host: prox-dev
+    port: 445
+    level: system
+
+  - name: Grafana
+    service: grafana-server
+    host: prox-dev
+    port: 3200
+    level: system
+    optional: true
+
+  - name: Docker
+    service: docker
+    host: prox-dev
+    level: system
+    optional: true
+
+domains:
+  base: core-stack.ru
+  ip: 185.49.243.237
+  subdomains:
+    - name: cargo
+      description: "Cargo Web"
+    - name: cargo-api
+      description: "Cargo API"
+    - name: fabro
+      description: "Fabro Web"
+    - name: fabro-api
+      description: "Fabro API"
+    - name: puls
+      description: "Puls Web"
+    - name: puls-api
+      description: "Puls API"
+    - name: skazki
+      description: "Skazki Web"
+    - name: skazki-api
+      description: "Skazki API"
+    - name: kraeved
+      description: "Kraеved Web"
+    - name: kraeved-api
+      description: "Kraеved API"
+    - name: logist23
+      description: "Logist23 Web"
+    - name: logist23-api
+      description: "Logist23 API"
+    - name: status
+      description: "Этот дашборд"
+    - name: grafana
+      description: "Grafana"
+    - name: admin
+      description: "Admin panel"
+    - name: ai
+      description: "AI сервисы"
+    - name: errors
+      description: "Error tracking"
+    - name: logs
+      description: "Логи (Loki)"
+    - name: s3
+      description: "Object storage"
+    - name: search
+      description: "Поиск"
+    - name: info
+      description: "Инфо"
