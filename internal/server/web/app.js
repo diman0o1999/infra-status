@@ -41,6 +41,7 @@ const I18N = {
         active: 'Активен',
         inactive: 'Неактивен',
         unreachable: 'Недоступен',
+        section_kuma: 'Мониторы Uptime',
         stat_ram: 'Общий RAM',
         col_service: 'Сервис',
         col_host: 'Хост',
@@ -88,6 +89,7 @@ const I18N = {
         active: 'Active',
         inactive: 'Inactive',
         unreachable: 'Unreachable',
+        section_kuma: 'Uptime Monitors',
         stat_ram: 'Total RAM',
         col_service: 'Service',
         col_host: 'Host',
@@ -373,6 +375,33 @@ function renderInfra(infra, targetId) {
     }
 }
 
+function renderKuma(monitors, targetId) {
+    const el = document.getElementById(targetId);
+    if (!el || !monitors) return;
+
+    if (!el.children.length || el.children.length !== monitors.length) {
+        el.innerHTML = monitors.map(m => {
+            const statusCls = m.up ? 'up' : (m.status === 2 ? 'pending' : 'down');
+            return `
+                <div class="kuma-item" data-kuma="${m.id}">
+                    <span class="kuma-dot ${statusCls}" data-kuma-dot></span>
+                    <span class="kuma-name">${m.name}</span>
+                    <span class="kuma-ping" data-kuma-ping>${m.ping ? m.ping + 'ms' : ''}</span>
+                    <span class="kuma-uptime" data-kuma-uptime>${m.uptime > 0 ? m.uptime.toFixed(1) + '%' : ''}</span>
+                </div>`;
+        }).join('');
+    } else {
+        monitors.forEach(m => {
+            const item = el.querySelector(`[data-kuma="${m.id}"]`);
+            if (!item) return;
+            const statusCls = m.up ? 'up' : (m.status === 2 ? 'pending' : 'down');
+            setClass(item.querySelector('[data-kuma-dot]'), 'kuma-dot ' + statusCls);
+            setText(item.querySelector('[data-kuma-ping]'), m.ping ? m.ping + 'ms' : '');
+            setText(item.querySelector('[data-kuma-uptime]'), m.uptime > 0 ? m.uptime.toFixed(1) + '%' : '');
+        });
+    }
+}
+
 function renderDomains(domains, targetId, full) {
     const el = document.getElementById(targetId);
     if (!el || !domains) return;
@@ -495,6 +524,7 @@ function render(data) {
     renderProjects(data.projects, 'projectsCompact', true);
     renderInfra(data.infrastructure, 'infraGridOverview');
     renderDomains(data.domains, 'domainsGridOverview', false);
+    renderKuma(data.kuma, 'kumaGridOverview');
 
     // Overview services widget
     renderServicesTable(data, 'servicesTableOverview');

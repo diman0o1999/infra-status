@@ -74,12 +74,26 @@ type DomainInfo struct {
 	Reachable   bool   `json:"reachable"`
 }
 
+// KumaMonitor holds Uptime Kuma monitor data
+type KumaMonitor struct {
+	ID     int     `json:"id"`
+	Name   string  `json:"name"`
+	Type   string  `json:"type"`
+	Group  string  `json:"group"`
+	Up     bool    `json:"up"`
+	Status int     `json:"status"`
+	Ping   int     `json:"ping"`
+	Uptime float64 `json:"uptime"`
+	Msg    string  `json:"msg"`
+}
+
 // Dashboard is the full state sent via SSE
 type Dashboard struct {
 	Hosts          []HostMetrics   `json:"hosts"`
 	Projects       []ProjectStatus `json:"projects"`
 	Infrastructure []InfraService  `json:"infrastructure"`
 	Domains        []DomainInfo    `json:"domains"`
+	Kuma           []KumaMonitor   `json:"kuma"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 	Alive          bool            `json:"alive"`
 }

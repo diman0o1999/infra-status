@@ -13,6 +13,13 @@ type Config struct {
 	Projects       []ProjectConfig   `yaml:"projects"`
 	Infrastructure []InfraConfig     `yaml:"infrastructure"`
 	Domains        DomainsConfig     `yaml:"domains"`
+	Kuma           KumaConfig        `yaml:"kuma"`
+}
+
+type KumaConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	URL     string `yaml:"url"`
+	Slug    string `yaml:"slug"`
 }
 
 type ServerConfig struct {

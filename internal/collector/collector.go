@@ -14,17 +14,22 @@ type Collector struct {
 	cfg     *config.Config
 	ssh     *SSHCollector
 	http    *HTTPChecker
+	kuma    *KumaCollector
 	mu      sync.RWMutex
 	state   models.Dashboard
 	onChange func(models.Dashboard)
 }
 
 func New(cfg *config.Config) *Collector {
-	return &Collector{
+	c := &Collector{
 		cfg:  cfg,
 		ssh:  NewSSHCollector(cfg.Hosts),
 		http: NewHTTPChecker(),
 	}
+	if cfg.Kuma.Enabled && cfg.Kuma.URL != "" {
+		c.kuma = NewKumaCollector(cfg.Kuma.URL, cfg.Kuma.Slug)
+	}
+	return c
 }
 
 func (c *Collector) OnChange(fn func(models.Dashboard)) {
@@ -94,6 +99,28 @@ func (c *Collector) collect() {
 	}
 
 	wg.Wait()
+
+	// Kuma monitors
+	if c.kuma != nil {
+		kumaData, err := c.kuma.Collect()
+		if err != nil {
+			log.Printf("Kuma collect error: %v", err)
+		} else {
+			for _, km := range kumaData {
+				dashboard.Kuma = append(dashboard.Kuma, models.KumaMonitor{
+					ID:     km.ID,
+					Name:   km.Name,
+					Type:   km.Type,
+					Group:  km.Group,
+					Up:     km.Up,
+					Status: km.Status,
+					Ping:   km.Ping,
+					Uptime: km.Uptime,
+					Msg:    km.Msg,
+				})
+			}
+		}
+	}
 
 	// Domains
 	dashboard.Domains = c.collectDomains()

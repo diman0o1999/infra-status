@@ -2,6 +2,11 @@ server:
   port: 8090
   refresh_interval: 10s
 
+kuma:
+  enabled: true
+  url: http://localhost:3003
+  slug: core-stack
+
 hosts:
   - name: prox-host
     host: 192.168.1.71
