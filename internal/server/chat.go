@@ -94,7 +94,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(s.ollamaURL+"/api/chat", "application/json", bytes.NewReader(body))
+	httpReq, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, s.ollamaURL+"/api/chat", bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
 		http.Error(w, `{"error":"ollama unavailable"}`, http.StatusServiceUnavailable)
 		return

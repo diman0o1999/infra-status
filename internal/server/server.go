@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"infra-status/internal/collector"
 	"infra-status/internal/models"
@@ -24,9 +25,16 @@ type Server struct {
 	ollamaURL   string
 	ollamaModel string
 	ollamaOn    bool
+	httpClient  *http.Client
 }
 
 func New(port int, col *collector.Collector, ollamaURL, ollamaModel string, ollamaOn bool) *Server {
+	transport := &http.Transport{
+		MaxIdleConns:        4,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     120 * time.Second,
+		DisableCompression:  true, // streaming — не сжимать
+	}
 	return &Server{
 		port:        port,
 		collector:   col,
@@ -34,6 +42,7 @@ func New(port int, col *collector.Collector, ollamaURL, ollamaModel string, olla
 		ollamaURL:   ollamaURL,
 		ollamaModel: ollamaModel,
 		ollamaOn:    ollamaOn,
+		httpClient:  &http.Client{Transport: transport, Timeout: 0}, // 0 = без таймаута для стриминга
 	}
 }
 
