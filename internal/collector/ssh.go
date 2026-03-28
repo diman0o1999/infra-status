@@ -219,6 +219,27 @@ func (c *SSHCollector) CheckService(hostName, service, level string) models.Serv
 	return st
 }
 
+// CollectNginxDomains scans nginx sites-enabled for active server_name entries on a host
+func (c *SSHCollector) CollectNginxDomains(host config.HostConfig) []string {
+	client, err := c.getClient(host)
+	if err != nil {
+		return nil
+	}
+	out, err := c.runCommand(client,
+		`grep -rh 'server_name' /etc/nginx/sites-enabled/ 2>/dev/null | grep -v '#' | sed 's/server_name//g;s/;//g' | tr ' \t' '\n\n' | grep '\.' | grep -v '^_' | sort -u`,
+	)
+	if err != nil {
+		return nil
+	}
+	var domains []string
+	for _, d := range strings.Split(out, "\n") {
+		if d = strings.TrimSpace(d); d != "" {
+			domains = append(domains, d)
+		}
+	}
+	return domains
+}
+
 func (c *SSHCollector) Close() {
 	for _, client := range c.clients {
 		client.Close()

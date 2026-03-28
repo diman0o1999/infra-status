@@ -47,6 +47,19 @@ hosts:
       disk_warn: 80
       disk_crit: 95
 
+  - name: prox-prod
+    host: 192.168.1.113
+    ssh_user: dev
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: vm
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
 projects:
   - name: Cargo
     icon: truck
@@ -133,53 +146,89 @@ projects:
     host: prox-dev
 
 infrastructure:
-  - name: PostgreSQL
+  # prox-dev (VM100)
+  - name: PostgreSQL (dev)
     service: postgresql@16-main
     host: prox-dev
     port: 5432
     level: system
 
-  - name: Redis
+  - name: Redis (dev)
     service: redis-server
     host: prox-dev
     port: 6379
     level: system
 
-  - name: nginx
+  - name: nginx (dev)
     service: nginx
     host: prox-dev
     port: 80
     level: system
 
-  - name: fail2ban
+  - name: fail2ban (dev)
     service: fail2ban
     host: prox-dev
     level: system
 
-  - name: SSH
-    service: ssh
-    host: prox-dev
-    port: 22
-    level: system
-
-  - name: SMB
+  - name: SMB (dev)
     service: smbd
     host: prox-dev
     port: 445
     level: system
 
+  # prox-infra (VM300)
+  - name: PostgreSQL (infra)
+    service: postgresql@16-main
+    host: prox-infra
+    port: 5432
+    level: system
+
+  - name: Redis (infra)
+    service: redis-server
+    host: prox-infra
+    port: 6379
+    level: system
+
+  - name: nginx (infra)
+    service: nginx
+    host: prox-infra
+    port: 80
+    level: system
+
   - name: Grafana
     service: grafana-server
-    host: prox-dev
+    host: prox-infra
     port: 3200
     level: system
-    optional: true
 
-  - name: Docker
-    service: docker
-    host: prox-dev
+  - name: Prometheus
+    service: prometheus
+    host: prox-infra
+    port: 9090
     level: system
-    optional: true
+
+  - name: Docker (infra)
+    service: docker
+    host: prox-infra
+    level: system
+
+  # prox-prod (VM200)
+  - name: nginx (prod)
+    service: nginx
+    host: prox-prod
+    port: 80
+    level: system
+
+  - name: SMB (prod)
+    service: smbd
+    host: prox-prod
+    port: 445
+    level: system
+
+  - name: fail2ban (prod)
+    service: fail2ban
+    host: prox-prod
+    level: system
 
 domains:
   base: core-stack.ru

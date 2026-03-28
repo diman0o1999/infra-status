@@ -1,0 +1,48 @@
+name: Deploy infra-status
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build linux/amd64
+        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o infra-status-linux .
+
+      - name: Upload binary to VM100
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROX_DEV_HOST }}
+          username: ${{ secrets.PROX_DEV_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "infra-status-linux"
+          target: "/tmp/"
+
+      - name: Deploy to VM300 via VM100
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROX_DEV_HOST }}
+          username: ${{ secrets.PROX_DEV_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod +x /tmp/infra-status-linux
+            scp -o StrictHostKeyChecking=no /tmp/infra-status-linux dev@192.168.1.202:/srv/projects/apps/infra-status/infra-status.new
+            ssh -o StrictHostKeyChecking=no dev@192.168.1.202 "mv /srv/projects/apps/infra-status/infra-status.new /srv/projects/apps/infra-status/infra-status && systemctl --user restart infra-status"
+            rm -f /tmp/infra-status-linux
+
+      - name: Notify Telegram
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then STATUS="✅"; else STATUS="❌"; fi
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
+            -d "text=${STATUS} DEPLOY infra-status%0ACommit: ${{ github.event.head_commit.message }}%0ABy: ${{ github.actor }}"

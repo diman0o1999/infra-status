@@ -72,6 +72,7 @@ type DomainInfo struct {
 	FQDN        string `json:"fqdn"`
 	Description string `json:"description"`
 	Reachable   bool   `json:"reachable"`
+	Host        string `json:"host,omitempty"` // which VM's nginx serves this domain
 }
 
 // KumaMonitor holds Uptime Kuma monitor data

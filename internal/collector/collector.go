@@ -2,6 +2,7 @@ package collector
 
 import (
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -207,16 +208,65 @@ func (c *Collector) collectInfra(i config.InfraConfig) models.InfraService {
 }
 
 func (c *Collector) collectDomains() []models.DomainInfo {
-	domains := make([]models.DomainInfo, 0, len(c.cfg.Domains.Subdomains))
+	// Build description lookup from static config
+	descMap := make(map[string]string)
 	for _, sub := range c.cfg.Domains.Subdomains {
 		fqdn := sub.Name + "." + c.cfg.Domains.Base
-		domains = append(domains, models.DomainInfo{
-			Name:        sub.Name,
-			FQDN:        fqdn,
-			Description: sub.Description,
-			Reachable:   true, // DNS is configured, actual check optional
-		})
+		descMap[fqdn] = sub.Description
 	}
+
+	// Discover nginx domains from all hosts concurrently
+	type hostResult struct {
+		hostName string
+		domains  []string
+	}
+	resCh := make(chan hostResult, len(c.cfg.Hosts))
+	var wg sync.WaitGroup
+	for _, host := range c.cfg.Hosts {
+		wg.Add(1)
+		go func(h config.HostConfig) {
+			defer wg.Done()
+			resCh <- hostResult{h.Name, c.ssh.CollectNginxDomains(h)}
+		}(host)
+	}
+	wg.Wait()
+	close(resCh)
+
+	seen := make(map[string]bool)
+	var domains []models.DomainInfo
+	for r := range resCh {
+		for _, fqdn := range r.domains {
+			if seen[fqdn] {
+				continue
+			}
+			seen[fqdn] = true
+			name := fqdn
+			if parts := strings.SplitN(fqdn, ".", 2); len(parts) > 0 {
+				name = parts[0]
+			}
+			domains = append(domains, models.DomainInfo{
+				Name:        name,
+				FQDN:        fqdn,
+				Description: descMap[fqdn],
+				Reachable:   true,
+				Host:        r.hostName,
+			})
+		}
+	}
+
+	// Add config-only entries not found in any nginx
+	for _, sub := range c.cfg.Domains.Subdomains {
+		fqdn := sub.Name + "." + c.cfg.Domains.Base
+		if !seen[fqdn] {
+			domains = append(domains, models.DomainInfo{
+				Name:        sub.Name,
+				FQDN:        fqdn,
+				Description: sub.Description,
+				Reachable:   false,
+			})
+		}
+	}
+
 	return domains
 }
 
