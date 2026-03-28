@@ -52,6 +52,9 @@ func (s *Server) Start() error {
 	// API endpoint (one-shot JSON)
 	mux.HandleFunc("/api/status", s.handleAPI)
 
+	// Config hot-reload
+	mux.HandleFunc("/api/reload", s.handleReload)
+
 	// Static files (embedded)
 	webContent, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -112,4 +115,21 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	state := s.collector.State()
 	json.NewEncoder(w).Encode(state)
+}
+
+func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if err := s.collector.Reload(); err != nil {
+		log.Printf("Config reload error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	log.Println("Config reloaded via API")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

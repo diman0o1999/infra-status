@@ -12,25 +12,49 @@ import (
 
 // Collector orchestrates all data collection
 type Collector struct {
-	cfg     *config.Config
-	ssh     *SSHCollector
-	http    *HTTPChecker
-	kuma    *KumaCollector
-	mu      sync.RWMutex
-	state   models.Dashboard
+	cfg      *config.Config
+	cfgPath  string
+	ssh      *SSHCollector
+	http     *HTTPChecker
+	kuma     *KumaCollector
+	mu       sync.RWMutex
+	state    models.Dashboard
 	onChange func(models.Dashboard)
 }
 
-func New(cfg *config.Config) *Collector {
+func New(cfg *config.Config, cfgPath string) *Collector {
 	c := &Collector{
-		cfg:  cfg,
-		ssh:  NewSSHCollector(cfg.Hosts),
-		http: NewHTTPChecker(),
+		cfg:     cfg,
+		cfgPath: cfgPath,
+		ssh:     NewSSHCollector(cfg.Hosts),
+		http:    NewHTTPChecker(),
 	}
 	if cfg.Kuma.Enabled && cfg.Kuma.URL != "" {
 		c.kuma = NewKumaCollector(cfg.Kuma.URL, cfg.Kuma.Slug)
 	}
 	return c
+}
+
+// Reload re-reads config.yaml from disk and hot-swaps it without restart
+func (c *Collector) Reload() error {
+	cfg, err := config.Load(c.cfgPath)
+	if err != nil {
+		return err
+	}
+	newSSH := NewSSHCollector(cfg.Hosts)
+	c.mu.Lock()
+	oldSSH := c.ssh
+	c.cfg = cfg
+	c.ssh = newSSH
+	if cfg.Kuma.Enabled && cfg.Kuma.URL != "" {
+		c.kuma = NewKumaCollector(cfg.Kuma.URL, cfg.Kuma.Slug)
+	} else {
+		c.kuma = nil
+	}
+	c.mu.Unlock()
+	oldSSH.Close()
+	go c.collect()
+	return nil
 }
 
 func (c *Collector) OnChange(fn func(models.Dashboard)) {

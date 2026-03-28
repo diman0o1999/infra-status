@@ -1168,6 +1168,27 @@ document.addEventListener('DOMContentLoaded', () => {
     initServicesFilter();
     initDomainFilterTabs();
     initSearch();
+    initReloadConfig();
     applyI18n();
     connect();
 });
+
+function initReloadConfig() {
+    const btn = document.getElementById('reloadConfigBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.classList.add('spinning');
+        try {
+            const res = await fetch('/api/reload', { method: 'POST' });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            showCopyToast('config.yaml перезагружен ✓');
+        } catch (e) {
+            showCopyToast('Ошибка: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('spinning');
+        }
+    });
+}

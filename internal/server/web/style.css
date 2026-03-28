@@ -1343,6 +1343,42 @@ body.edit-mode .widget-actions {
     padding: 1px 5px;
 }
 
+/* --- Reload Config Button --- */
+.reload-cfg-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.reload-cfg-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-subtle);
+}
+
+.reload-cfg-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.reload-cfg-btn.spinning svg {
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* --- Search Overlay --- */
 .search-overlay {
     position: fixed;

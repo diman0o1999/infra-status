@@ -25,7 +25,7 @@ func main() {
 	log.Printf("Loaded config: %d hosts, %d projects, %d infra services, %d domains",
 		len(cfg.Hosts), len(cfg.Projects), len(cfg.Infrastructure), len(cfg.Domains.Subdomains))
 
-	col := collector.New(cfg)
+	col := collector.New(cfg, *configPath)
 	defer col.Stop()
 
 	srv := server.New(cfg.Server.Port, col)
