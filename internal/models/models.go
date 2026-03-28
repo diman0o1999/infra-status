@@ -97,4 +97,5 @@ type Dashboard struct {
 	Kuma           []KumaMonitor   `json:"kuma"`
 	UpdatedAt      time.Time       `json:"updated_at"`
 	Alive          bool            `json:"alive"`
+	Env            string          `json:"env"` // "dev" or "prod"
 }

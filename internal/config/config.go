@@ -25,6 +25,7 @@ type KumaConfig struct {
 type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	RefreshInterval time.Duration `yaml:"refresh_interval"`
+	Env             string        `yaml:"env"` // "dev" or "prod"
 }
 
 type HostConfig struct {

@@ -51,6 +51,16 @@ const I18N = {
         host_unreachable: 'Хост недоступен',
         uptime_prefix: 'аптайм',
         load_prefix: 'нагрузка',
+        env_dev: 'DEV',
+        env_prod: 'PROD',
+        search_placeholder: 'Поиск проектов, доменов, сервисов...',
+        search_hint: 'Начните вводить для поиска',
+        search_empty: 'Ничего не найдено',
+        avg_uptime: 'Ср. аптайм',
+        avg_ping: 'Ср. пинг',
+        monitors_up: 'Мониторы',
+        projects_ok: 'Проектов ок',
+        copied: 'Скопировано',
     },
     en: {
         connecting: 'Connecting...',
@@ -99,6 +109,16 @@ const I18N = {
         host_unreachable: 'Host unreachable',
         uptime_prefix: 'uptime',
         load_prefix: 'load',
+        env_dev: 'DEV',
+        env_prod: 'PROD',
+        search_placeholder: 'Search projects, domains, services...',
+        search_hint: 'Start typing to search',
+        search_empty: 'Nothing found',
+        avg_uptime: 'Avg Uptime',
+        avg_ping: 'Avg Ping',
+        monitors_up: 'Monitors',
+        projects_ok: 'Projects OK',
+        copied: 'Copied',
     }
 };
 
@@ -121,6 +141,39 @@ function getTheme() {
 function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
+}
+
+// --- Project Logos (inline SVG) ---
+const PROJECT_LOGOS = {
+    cargo: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#1e3a5f"/><rect x="4" y="14" width="19" height="13" rx="2" fill="white" opacity="0.9"/><path d="M23 14h7l2 5v8h-9V14z" fill="white" opacity="0.7"/><path d="M23 14l5-3.5 3 3.5z" fill="white" opacity="0.45"/><circle cx="10" cy="28.5" r="3" fill="#1e3a5f" stroke="white" stroke-width="2"/><circle cx="21" cy="28.5" r="3" fill="#1e3a5f" stroke="white" stroke-width="2"/><circle cx="28.5" cy="28.5" r="2.5" fill="#1e3a5f" stroke="white" stroke-width="2"/><rect x="6" y="17" width="6" height="4" rx="1" fill="#1e3a5f" opacity="0.35"/></svg>`,
+
+    fabro: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#f97316"/><path d="M18 3v5M18 28v5M3 18h5M28 18h5" stroke="white" stroke-width="3" stroke-linecap="round"/><path d="M7.4 7.4l3.5 3.5M25.1 25.1l3.5 3.5M7.4 28.6l3.5-3.5M25.1 10.9l3.5-3.5" stroke="white" stroke-width="3" stroke-linecap="round"/><circle cx="18" cy="18" r="7" fill="none" stroke="white" stroke-width="2.5"/><circle cx="18" cy="18" r="3" fill="white"/><circle cx="18" cy="18" r="1.2" fill="#f97316"/></svg>`,
+
+    puls: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#3b82f6"/><path d="M3 18h7l3-8 5 16 4-10 3 6h8" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`,
+
+    emedic: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#16a34a"/><rect x="14" y="7" width="8" height="22" rx="4" fill="white"/><rect x="7" y="14" width="22" height="8" rx="4" fill="white"/></svg>`,
+
+    skazki: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#7c3aed"/><path d="M6 11a2 2 0 012-2h9v18H8a2 2 0 01-2-2V11z" fill="white" opacity="0.9"/><path d="M30 11a2 2 0 00-2-2h-9v18h9a2 2 0 002-2V11z" fill="white" opacity="0.6"/><line x1="18" y1="9" x2="18" y2="27" stroke="#7c3aed" stroke-width="1.5"/><path d="M25 6l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="white"/></svg>`,
+
+    kraeved: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#0d9488"/><circle cx="18" cy="17" r="10" fill="none" stroke="white" stroke-width="2"/><path d="M18 7v4M18 27v4M8 17h4M26 17h4" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M18 17l-4-7 4 2.5 4-2.5z" fill="white"/><path d="M18 17l4 7-4-2.5-4 2.5z" fill="white" opacity="0.5"/><circle cx="18" cy="17" r="2" fill="white"/><path d="M18 27v5M15 32l3 2 3-2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`,
+
+    logist23: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#f59e0b"/><rect x="8" y="10" width="20" height="21" rx="2" fill="white" opacity="0.9"/><rect x="13" y="6" width="10" height="7" rx="2" fill="#f59e0b"/><rect x="13" y="6" width="10" height="6" rx="2" fill="white" opacity="0.7"/><rect x="12" y="19" width="12" height="2.5" rx="1.25" fill="#f59e0b"/><rect x="12" y="24" width="9" height="2.5" rx="1.25" fill="#f59e0b"/><rect x="12" y="29" width="6" height="2" rx="1" fill="#f59e0b" opacity="0.6"/></svg>`,
+
+    racia: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect width="36" height="36" rx="8" fill="#b91c1c"/><rect x="13" y="12" width="10" height="18" rx="3" fill="white" opacity="0.9"/><rect x="15" y="8" width="6" height="6" rx="2" fill="white" opacity="0.7"/><circle cx="18" cy="25" r="2.5" fill="#b91c1c"/><rect x="15" y="17" width="6" height="2" rx="1" fill="#b91c1c" opacity="0.5"/><path d="M8 11c2.5-4.5 5-7 10-7s7.5 2.5 10 7" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.7"/><path d="M11 15c1.5-2.5 3.5-4 7-4s5.5 1.5 7 4" stroke="white" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5"/></svg>`,
+};
+
+function getProjectLogo(name) {
+    if (!name) return null;
+    const lc = name.toLowerCase();
+    if (lc.includes('cargo')) return PROJECT_LOGOS.cargo;
+    if (lc.includes('fabro')) return PROJECT_LOGOS.fabro;
+    if (lc.includes('puls')) return PROJECT_LOGOS.puls;
+    if (lc.includes('medic') || lc.includes('emedic')) return PROJECT_LOGOS.emedic;
+    if (lc.includes('skazki')) return PROJECT_LOGOS.skazki;
+    if (lc.includes('kraev') || lc.includes('kraeved')) return PROJECT_LOGOS.kraeved;
+    if (lc.includes('logist')) return PROJECT_LOGOS.logist23;
+    if (lc.includes('racia')) return PROJECT_LOGOS.racia;
+    return null;
 }
 
 // --- Icons ---
@@ -146,7 +199,14 @@ const DOMAIN_EMOJI = {
     'search': '🔍', 'admin': '⚙️', 'cdn': '⚡',
 };
 
-function getDomainIcon(name) { return DOMAIN_EMOJI[name] || '🌐'; }
+function getDomainIcon(name) {
+    if (!name) return '🌐';
+    const lc = name.toLowerCase();
+    // Try project logo first
+    const logo = getProjectLogo(lc);
+    if (logo) return logo;
+    return DOMAIN_EMOJI[lc] || '🌐';
+}
 
 function formatBytes(bytes) {
     if (!bytes) return '0 B';
@@ -162,8 +222,6 @@ function barClass(pct, w = 70, c = 90) {
 }
 
 // --- Stable Rendering (no layout shift) ---
-// Strategy: create DOM once, then update only values via data-key selectors
-
 let isFirstRender = true;
 
 function setText(el, text) {
@@ -178,6 +236,7 @@ function setStyle(el, prop, val) {
     if (el && el.style[prop] !== val) el.style[prop] = val;
 }
 
+// --- Quick Stats ---
 function renderQuickStats(data) {
     const hosts = data.hosts ? data.hosts.length : 0;
     const onlineHosts = data.hosts ? data.hosts.filter(h => h.online).length : 0;
@@ -198,7 +257,58 @@ function renderQuickStats(data) {
     setText(document.getElementById('statRAM'), formatBytes(totalProjectRAM));
 }
 
-// Build stable host card HTML with data-host attributes for targeted updates
+// --- Uptime Hero (Kuma aggregate stats) ---
+function renderUptimeHero(data) {
+    const el = document.getElementById('uptimeHero');
+    if (!el) return;
+    const kuma = data.kuma || [];
+    if (!kuma.length) { el.style.display = 'none'; return; }
+
+    const upCount = kuma.filter(m => m.up).length;
+    const pingMonitors = kuma.filter(m => m.ping > 0);
+    const avgPing = pingMonitors.length > 0
+        ? Math.round(pingMonitors.reduce((a, m) => a + m.ping, 0) / pingMonitors.length) : 0;
+    const uptimeMonitors = kuma.filter(m => m.uptime > 0);
+    const avgUptime = uptimeMonitors.length > 0
+        ? (uptimeMonitors.reduce((a, m) => a + m.uptime, 0) / uptimeMonitors.length).toFixed(1) : '0.0';
+    const allOk = upCount === kuma.length;
+    const okProjects = (data.projects || []).filter(p => p.status === 'ok').length;
+    const totalProjects = (data.projects || []).length;
+
+    el.style.display = '';
+    el.innerHTML = `
+        <div class="hero-stat">
+            <div class="hero-val ${allOk ? 'ok' : 'warn'}">${avgUptime}%</div>
+            <div class="hero-lab">${t('avg_uptime')}</div>
+        </div>
+        <div class="hero-sep"></div>
+        <div class="hero-stat">
+            <div class="hero-val ${allOk ? 'ok' : 'warn'}">${upCount}/${kuma.length}</div>
+            <div class="hero-lab">${t('monitors_up')}</div>
+        </div>
+        ${avgPing > 0 ? `<div class="hero-sep"></div>
+        <div class="hero-stat">
+            <div class="hero-val">${avgPing}ms</div>
+            <div class="hero-lab">${t('avg_ping')}</div>
+        </div>` : ''}
+        <div class="hero-sep"></div>
+        <div class="hero-stat">
+            <div class="hero-val ${okProjects === totalProjects ? 'ok' : 'warn'}">${okProjects}/${totalProjects}</div>
+            <div class="hero-lab">${t('projects_ok')}</div>
+        </div>
+    `;
+}
+
+// --- ENV badge ---
+function renderEnvBadge(env) {
+    const el = document.getElementById('envBadge');
+    if (!el || !env) return;
+    el.textContent = env.toUpperCase();
+    el.className = 'env-badge env-' + env.toLowerCase();
+    el.style.display = '';
+}
+
+// --- Host Cards (with SSH copy) ---
 function buildHostCard(h) {
     return `
         <div class="host-card ${h.status}" data-host="${h.name}">
@@ -208,7 +318,7 @@ function buildHostCard(h) {
             </div>
             <div class="host-meta">
                 <span>${h.type}</span>
-                <span>${h.host}</span>
+                <span class="host-ip">${h.host}</span>
                 <span data-host-uptime>${h.uptime ? t('uptime_prefix') + ' ' + h.uptime : ''}</span>
                 <span data-host-load>${h.load ? t('load_prefix') + ' ' + h.load : ''}</span>
             </div>
@@ -233,11 +343,16 @@ function buildHostCard(h) {
                 </div>
                 <div class="bar"><div class="bar-fill ${h.online ? barClass(h.disk.percent, 80, 95) : ''}" data-host-disk-bar style="width:${h.online ? Math.min(h.disk.percent, 100) : 0}%"></div></div>
             </div>
+            ${h.online ? `<div class="host-footer">
+                <button class="ssh-copy-btn" onclick="copySSH('${h.host}')" title="Скопировать SSH команду">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    ssh dev@${h.host}
+                </button>
+            </div>` : ''}
         </div>`;
 }
 
 function updateHostCard(card, h) {
-    // Update status class on card
     card.className = 'host-card ' + h.status;
     const badge = card.querySelector('[data-host-badge]');
     if (badge) { setClass(badge, 'badge ' + h.status); setText(badge, t(h.status)); }
@@ -245,17 +360,14 @@ function updateHostCard(card, h) {
     setText(card.querySelector('[data-host-uptime]'), h.uptime ? t('uptime_prefix') + ' ' + h.uptime : '');
     setText(card.querySelector('[data-host-load]'), h.load ? t('load_prefix') + ' ' + h.load : '');
 
-    // CPU
     setText(card.querySelector('[data-host-cpu]'), h.online ? h.cpu.toFixed(1) + '%' : '-');
     const cpuBar = card.querySelector('[data-host-cpu-bar]');
     if (cpuBar) { setStyle(cpuBar, 'width', (h.online ? Math.min(h.cpu, 100) : 0) + '%'); setClass(cpuBar, 'bar-fill ' + (h.online ? barClass(h.cpu) : '')); }
 
-    // RAM
     setText(card.querySelector('[data-host-ram]'), h.online ? h.ram.percent.toFixed(1) + '% \u2014 ' + formatBytes(h.ram.used) + ' / ' + formatBytes(h.ram.total) : '-');
     const ramBar = card.querySelector('[data-host-ram-bar]');
     if (ramBar) { setStyle(ramBar, 'width', (h.online ? Math.min(h.ram.percent, 100) : 0) + '%'); setClass(ramBar, 'bar-fill ' + (h.online ? barClass(h.ram.percent, 80, 95) : '')); }
 
-    // Disk
     setText(card.querySelector('[data-host-disk]'), h.online ? h.disk.percent.toFixed(1) + '% \u2014 ' + formatBytes(h.disk.used) + ' / ' + formatBytes(h.disk.total) : '-');
     const diskBar = card.querySelector('[data-host-disk-bar]');
     if (diskBar) { setStyle(diskBar, 'width', (h.online ? Math.min(h.disk.percent, 100) : 0) + '%'); setClass(diskBar, 'bar-fill ' + (h.online ? barClass(h.disk.percent, 80, 95) : '')); }
@@ -266,10 +378,8 @@ function renderHosts(hosts, targetId) {
     if (!el || !hosts) return;
 
     if (!el.children.length || el.children.length !== hosts.length) {
-        // First render or structure changed — build full DOM
         el.innerHTML = hosts.map(buildHostCard).join('');
     } else {
-        // Update existing cards in-place
         hosts.forEach(h => {
             const card = el.querySelector(`[data-host="${h.name}"]`);
             if (card) updateHostCard(card, h);
@@ -277,11 +387,17 @@ function renderHosts(hosts, targetId) {
     }
 }
 
+// --- Project Cards (with logo) ---
 function buildProjectCard(p, compact) {
+    const logo = getProjectLogo(p.name);
+    const iconHtml = logo
+        ? `<span class="project-icon project-logo-icon">${logo}</span>`
+        : `<span class="project-icon">${getIcon(p.icon)}</span>`;
+
     return `
         <div class="project-card ${p.status}" data-project="${p.name}">
             <div class="project-header">
-                <span class="project-icon">${getIcon(p.icon)}</span>
+                ${iconHtml}
                 <span class="project-name">${p.name}</span>
                 <span class="project-status-badge badge ${p.status}" data-proj-badge>${t(p.status)}</span>
             </div>
@@ -306,8 +422,8 @@ function buildProjectCard(p, compact) {
                         <span class="endpoint-status" data-proj-api-code>${p.api_status || ''}</span>
                     </div>` : ''}
             </div>
-            ${!compact ? `<div class="project-services" data-proj-svcs>
-                ${(p.services || []).map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${s.name}">${s.name}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
+            ${!compact && p.services && p.services.length ? `<div class="project-services" data-proj-svcs>
+                ${p.services.map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${s.name}">${s.name}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
             </div>` : ''}
         </div>`;
 }
@@ -334,14 +450,12 @@ function updateProjectCard(card, p) {
     const apiCode = card.querySelector('[data-proj-api-code]');
     if (apiCode) setText(apiCode, p.api_status ? String(p.api_status) : '');
 
-    // Update service tags
     if (p.services) {
         p.services.forEach(s => {
             const tag = card.querySelector(`[data-svc="${s.name}"]`);
             if (tag) {
                 setClass(tag, 'svc-tag ' + (s.active ? 'active' : 'inactive'));
-                const text = s.name + (s.memory ? ' \u00b7 ' + formatBytes(s.memory) : '');
-                setText(tag, text);
+                setText(tag, s.name + (s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''));
             }
         });
     }
@@ -361,6 +475,7 @@ function renderProjects(projects, targetId, compact) {
     }
 }
 
+// --- Infra Grid ---
 function renderInfra(infra, targetId) {
     const el = document.getElementById(targetId);
     if (!el || !infra) return;
@@ -391,6 +506,7 @@ function renderInfra(infra, targetId) {
     }
 }
 
+// --- Kuma Monitors ---
 function renderKuma(monitors, targetId) {
     const el = document.getElementById(targetId);
     if (!el || !monitors) return;
@@ -418,15 +534,38 @@ function renderKuma(monitors, targetId) {
     }
 }
 
+// --- Domains (with filter support) ---
+let domainFilter = 'all';
+
+function initDomainFilterTabs() {
+    document.querySelectorAll('#domainFilterTabs .domain-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            domainFilter = btn.dataset.filter;
+            document.querySelectorAll('#domainFilterTabs .domain-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true);
+        });
+    });
+}
+
 function renderDomains(domains, targetId, full) {
     const el = document.getElementById(targetId);
     if (!el || !domains) return;
 
     if (full) {
-        el.innerHTML = domains.map(d => `
+        let filtered = domains;
+        if (domainFilter === 'core-stack.ru') filtered = domains.filter(d => d.fqdn && d.fqdn.endsWith('.core-stack.ru'));
+        else if (domainFilter === 'local') filtered = domains.filter(d => d.fqdn && (d.fqdn.endsWith('.local') || !d.fqdn.includes('.')));
+        else if (domainFilter === 'down') filtered = domains.filter(d => d.reachable === false);
+
+        el.innerHTML = filtered.map(d => {
+            const iconContent = getDomainIcon(d.name);
+            // Check if it's an SVG (project logo) or emoji
+            const isSvg = iconContent && iconContent.startsWith('<svg');
+            return `
             <a class="domain-card ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" rel="noopener">
                 <div class="domain-card-top">
-                    <span class="domain-card-icon">${getDomainIcon(d.name)}</span>
+                    <span class="domain-card-icon ${isSvg ? 'domain-card-icon--logo' : ''}">${iconContent}</span>
                     <div class="domain-card-info">
                         <div class="domain-card-name">${d.name}</div>
                         <div class="domain-card-fqdn">${d.fqdn}</div>
@@ -435,7 +574,8 @@ function renderDomains(domains, targetId, full) {
                 </div>
                 ${d.description ? `<div class="domain-card-desc">${d.description}</div>` : ''}
                 ${d.host ? `<div class="domain-card-meta"><span class="domain-vm-badge">${d.host}</span></div>` : ''}
-            </a>`).join('');
+            </a>`;
+        }).join('');
     } else {
         el.innerHTML = domains.map(d => `
             <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
@@ -445,6 +585,7 @@ function renderDomains(domains, targetId, full) {
     }
 }
 
+// --- Services Table ---
 function renderServicesTable(data, targetId) {
     const el = document.getElementById(targetId || 'servicesTable');
     if (!el) return;
@@ -469,7 +610,6 @@ function renderServicesTable(data, targetId) {
 
     rows.sort((a, b) => b.memory - a.memory);
 
-    // Apply filter
     const q = (document.getElementById('servicesFilter')?.value || '').toLowerCase().trim();
     const stateF = document.getElementById('servicesStateFilter')?.value || 'all';
     const filtered = rows.filter(r => {
@@ -513,6 +653,7 @@ function initServicesFilter() {
     if (s) s.addEventListener('change', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
 }
 
+// --- Status Banner ---
 function updateBanner(data) {
     const banner = document.getElementById('statusBanner');
     let overall = 'ok';
@@ -533,7 +674,6 @@ function updateBanner(data) {
     banner.className = 'status-banner ' + overall;
     banner.querySelector('.status-banner-text').textContent = t('status_' + overall);
 
-    // Show max host uptime
     if (data.hosts) {
         const online = data.hosts.find(h => h.online && h.uptime);
         if (online) {
@@ -542,19 +682,18 @@ function updateBanner(data) {
     }
 }
 
+// --- Main Render ---
 function render(data) {
-    // Overview tab
+    renderEnvBadge(data.env);
+    renderUptimeHero(data);
     renderQuickStats(data);
     renderHosts(data.hosts, 'hostsGridOverview');
     renderProjects(data.projects, 'projectsCompact', true);
     renderInfra(data.infrastructure, 'infraGridOverview');
     renderDomains(data.domains, 'domainsGridOverview', false);
     renderKuma(data.kuma, 'kumaGridOverview');
-
-    // Overview services widget
     renderServicesTable(data, 'servicesTableOverview');
 
-    // Dedicated tabs
     renderHosts(data.hosts, 'hostsGridFull');
     renderProjects(data.projects, 'projectsGridFull', false);
     renderServicesTable(data, 'servicesTable');
@@ -562,17 +701,15 @@ function render(data) {
 
     updateBanner(data);
 
-    // Update time
     const dt = new Date(data.updated_at);
     document.getElementById('updatedAt').textContent = dt.toLocaleTimeString(currentLang === 'ru' ? 'ru-RU' : 'en-US');
 
-    // Connection status
     document.getElementById('pulse').className = 'pulse-dot live';
     document.getElementById('connectionText').textContent = t('connected');
-
-    // Hide loading
     document.getElementById('loadingOverlay').classList.remove('visible');
     document.getElementById('errorOverlay').classList.remove('visible');
+
+    buildSearchIndex(data);
 }
 
 // --- Routing ---
@@ -614,6 +751,226 @@ function initStatCards() {
     });
 }
 
+// --- SSH Copy ---
+function copySSH(host) {
+    const cmd = `ssh dev@${host}`;
+    navigator.clipboard.writeText(cmd).then(() => {
+        showCopyToast(cmd);
+    }).catch(() => {
+        prompt('SSH команда:', cmd);
+    });
+}
+
+function showCopyToast(text) {
+    const toast = document.getElementById('copyToast');
+    if (!toast) return;
+    toast.textContent = `${t('copied')}: ${text}`;
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+// --- Global Search ---
+let searchIndex = [];
+let searchOpen = false;
+let searchFocusIdx = 0;
+
+function buildSearchIndex(data) {
+    searchIndex = [];
+    (data.projects || []).forEach(p => {
+        searchIndex.push({
+            type: 'project',
+            logo: getProjectLogo(p.name),
+            icon: getIcon(p.icon),
+            name: p.name,
+            desc: p.description,
+            sub: p.web_url ? p.web_url.replace('https://', '') : '',
+            tab: 'projects',
+            url: '',
+            status: p.status,
+        });
+    });
+    (data.domains || []).forEach(d => {
+        searchIndex.push({
+            type: 'domain',
+            logo: null,
+            icon: DOMAIN_EMOJI[d.name] || '🌐',
+            name: d.fqdn,
+            desc: d.description || '',
+            sub: d.host || '',
+            tab: 'domains',
+            url: `https://${d.fqdn}`,
+            status: d.reachable !== false ? 'ok' : 'down',
+        });
+    });
+    (data.hosts || []).forEach(h => {
+        searchIndex.push({
+            type: 'host',
+            logo: null,
+            icon: '🖥️',
+            name: h.name,
+            desc: h.type,
+            sub: h.host,
+            tab: 'hosts',
+            url: '',
+            status: h.status,
+        });
+    });
+    (data.infrastructure || []).forEach(i => {
+        searchIndex.push({
+            type: 'service',
+            logo: null,
+            icon: '⚙️',
+            name: i.name,
+            desc: i.service,
+            sub: i.port ? ':' + i.port : '',
+            tab: 'services',
+            url: '',
+            status: i.active ? 'ok' : 'inactive',
+        });
+    });
+}
+
+function doSearch(q) {
+    const resultsEl = document.getElementById('searchResults');
+    if (!resultsEl) return;
+    searchFocusIdx = 0;
+
+    if (!q.trim()) {
+        resultsEl.innerHTML = `<div class="search-hint">${t('search_hint')}</div>`;
+        return;
+    }
+
+    const ql = q.toLowerCase();
+    const matches = searchIndex.filter(item =>
+        item.name.toLowerCase().includes(ql) ||
+        (item.desc || '').toLowerCase().includes(ql) ||
+        (item.sub || '').toLowerCase().includes(ql)
+    ).slice(0, 12);
+
+    if (!matches.length) {
+        resultsEl.innerHTML = `<div class="search-empty">${t('search_empty')}</div>`;
+        return;
+    }
+
+    resultsEl.innerHTML = matches.map((item, i) => {
+        const iconHtml = item.logo
+            ? `<span class="si-logo">${item.logo}</span>`
+            : `<span class="si-emoji">${item.icon}</span>`;
+        return `
+        <div class="search-item ${i === 0 ? 'focused' : ''}" data-idx="${i}" data-tab="${item.tab}" data-url="${item.url || ''}">
+            ${iconHtml}
+            <div class="si-info">
+                <div class="si-name">${highlightMatch(item.name, ql)}</div>
+                ${item.desc ? `<div class="si-desc">${item.desc}</div>` : ''}
+            </div>
+            <div class="si-right">
+                <span class="si-type-badge">${item.type}</span>
+                ${item.sub ? `<span class="si-sub">${item.sub}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    resultsEl.querySelectorAll('.search-item').forEach(el => {
+        el.addEventListener('click', () => activateSearchItem(el));
+        el.addEventListener('mouseenter', () => {
+            resultsEl.querySelectorAll('.search-item').forEach(x => x.classList.remove('focused'));
+            el.classList.add('focused');
+            searchFocusIdx = parseInt(el.dataset.idx);
+        });
+    });
+}
+
+function highlightMatch(text, q) {
+    if (!q) return text;
+    const idx = text.toLowerCase().indexOf(q);
+    if (idx < 0) return text;
+    return text.slice(0, idx) + `<mark>${text.slice(idx, idx + q.length)}</mark>` + text.slice(idx + q.length);
+}
+
+function activateSearchItem(el) {
+    if (el.dataset.url) {
+        window.open(el.dataset.url, '_blank');
+    } else if (el.dataset.tab) {
+        switchTab(el.dataset.tab);
+    }
+    closeSearch();
+}
+
+function navigateSearch(dir) {
+    const items = document.querySelectorAll('#searchResults .search-item');
+    if (!items.length) return;
+    items[searchFocusIdx]?.classList.remove('focused');
+    searchFocusIdx = (searchFocusIdx + dir + items.length) % items.length;
+    const focused = items[searchFocusIdx];
+    focused?.classList.add('focused');
+    focused?.scrollIntoView({ block: 'nearest' });
+}
+
+function openSearch() {
+    searchOpen = true;
+    document.getElementById('searchOverlay').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+        const input = document.getElementById('searchInput');
+        if (input) { input.value = ''; input.focus(); }
+        doSearch('');
+    }, 50);
+}
+
+function closeSearch() {
+    searchOpen = false;
+    document.getElementById('searchOverlay').classList.remove('visible');
+    document.body.style.overflow = '';
+}
+
+function initSearch() {
+    const input = document.getElementById('searchInput');
+    if (input) {
+        input.addEventListener('input', (e) => doSearch(e.target.value));
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
+            if (e.key === 'ArrowDown') { e.preventDefault(); navigateSearch(1); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); navigateSearch(-1); }
+            if (e.key === 'Enter') {
+                const focused = document.querySelector('#searchResults .search-item.focused');
+                if (focused) activateSearchItem(focused);
+            }
+        });
+    }
+
+    const backdrop = document.getElementById('searchBackdrop');
+    if (backdrop) backdrop.addEventListener('click', closeSearch);
+
+    const btn = document.getElementById('searchBtn');
+    if (btn) btn.addEventListener('click', openSearch);
+
+    // Global keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Cmd/Ctrl+K → toggle search
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            searchOpen ? closeSearch() : openSearch();
+            return;
+        }
+        // Escape → close search if open
+        if (e.key === 'Escape' && searchOpen) {
+            e.preventDefault();
+            closeSearch();
+            return;
+        }
+        // 1-5 tab shortcuts when not typing in input
+        const active = document.activeElement;
+        const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+        if (!typing && !searchOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            const tabKeys = { '1': 'overview', '2': 'hosts', '3': 'projects', '4': 'services', '5': 'domains' };
+            if (tabKeys[e.key]) {
+                e.preventDefault();
+                switchTab(tabKeys[e.key]);
+            }
+        }
+    });
+}
+
 // --- Theme Toggle ---
 function initTheme() {
     setTheme(getTheme());
@@ -635,7 +992,6 @@ function initLang() {
             document.querySelectorAll('#langToggle .toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             applyI18n();
-            // Re-render with current data
             if (lastData) render(lastData);
         });
     });
@@ -704,23 +1060,16 @@ function initWidgets() {
     const grid = document.getElementById('widgetGrid');
     if (!grid) return;
 
-    // Restore saved layout
     restoreLayout();
 
-    // Edit mode toggle
     const editBtn = document.getElementById('editToggle');
     editBtn.addEventListener('click', () => {
         editMode = !editMode;
         document.body.classList.toggle('edit-mode', editMode);
         editBtn.classList.toggle('active', editMode);
-
-        // Toggle draggable on widgets
-        grid.querySelectorAll('.widget').forEach(w => {
-            w.draggable = editMode;
-        });
+        grid.querySelectorAll('.widget').forEach(w => { w.draggable = editMode; });
     });
 
-    // Resize buttons
     grid.querySelectorAll('.widget-resize').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const widget = e.target.closest('.widget');
@@ -730,7 +1079,6 @@ function initWidgets() {
         });
     });
 
-    // Drag events
     grid.addEventListener('dragstart', (e) => {
         if (!editMode) return;
         draggedWidget = e.target.closest('.widget');
@@ -740,10 +1088,7 @@ function initWidgets() {
     });
 
     grid.addEventListener('dragend', () => {
-        if (draggedWidget) {
-            draggedWidget.classList.remove('dragging');
-            draggedWidget = null;
-        }
+        if (draggedWidget) { draggedWidget.classList.remove('dragging'); draggedWidget = null; }
         grid.querySelectorAll('.widget').forEach(w => w.classList.remove('drag-over'));
     });
 
@@ -752,7 +1097,6 @@ function initWidgets() {
         if (!editMode || !draggedWidget) return;
         const target = e.target.closest('.widget');
         if (!target || target === draggedWidget) return;
-
         grid.querySelectorAll('.widget').forEach(w => w.classList.remove('drag-over'));
         target.classList.add('drag-over');
     });
@@ -762,20 +1106,12 @@ function initWidgets() {
         if (!editMode || !draggedWidget) return;
         const target = e.target.closest('.widget');
         if (!target || target === draggedWidget) return;
-
         target.classList.remove('drag-over');
-
-        // Swap positions
         const widgets = [...grid.querySelectorAll('.widget')];
         const fromIdx = widgets.indexOf(draggedWidget);
         const toIdx = widgets.indexOf(target);
-
-        if (fromIdx < toIdx) {
-            target.after(draggedWidget);
-        } else {
-            target.before(draggedWidget);
-        }
-
+        if (fromIdx < toIdx) target.after(draggedWidget);
+        else target.before(draggedWidget);
         saveLayout();
     });
 }
@@ -783,34 +1119,22 @@ function initWidgets() {
 function saveLayout() {
     const grid = document.getElementById('widgetGrid');
     if (!grid) return;
-    const layout = [...grid.querySelectorAll('.widget')].map(w => ({
-        id: w.dataset.widget,
-        size: w.dataset.size,
-    }));
+    const layout = [...grid.querySelectorAll('.widget')].map(w => ({ id: w.dataset.widget, size: w.dataset.size }));
     localStorage.setItem('dashboard_layout', JSON.stringify(layout));
 }
 
 function restoreLayout() {
     const saved = localStorage.getItem('dashboard_layout');
     if (!saved) return;
-
     try {
         const layout = JSON.parse(saved);
         const grid = document.getElementById('widgetGrid');
         if (!grid) return;
-
         const widgetMap = {};
-        grid.querySelectorAll('.widget').forEach(w => {
-            widgetMap[w.dataset.widget] = w;
-        });
-
-        // Reorder and resize
+        grid.querySelectorAll('.widget').forEach(w => { widgetMap[w.dataset.widget] = w; });
         layout.forEach(item => {
             const widget = widgetMap[item.id];
-            if (widget) {
-                widget.dataset.size = item.size;
-                grid.appendChild(widget); // moves to end = reorders
-            }
+            if (widget) { widget.dataset.size = item.size; grid.appendChild(widget); }
         });
     } catch(e) {
         console.error('Layout restore error:', e);
@@ -826,6 +1150,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initVisibility();
     initWidgets();
     initServicesFilter();
+    initDomainFilterTabs();
+    initSearch();
     applyI18n();
     connect();
 });

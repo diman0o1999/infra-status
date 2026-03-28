@@ -127,6 +127,7 @@ func (c *Collector) collect() {
 	dashboard.Domains = c.collectDomains()
 	dashboard.UpdatedAt = time.Now()
 	dashboard.Alive = true
+	dashboard.Env = c.cfg.Server.Env
 
 	c.mu.Lock()
 	c.state = dashboard
