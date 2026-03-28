@@ -534,8 +534,9 @@ function renderKuma(monitors, targetId) {
     }
 }
 
-// --- Domains (with filter support) ---
+// --- Domains ---
 let domainFilter = 'all';
+const domainAccOpen = new Set(['domain-acc-cloud']); // cloud open by default
 
 function initDomainFilterTabs() {
     document.querySelectorAll('#domainFilterTabs .domain-tab').forEach(btn => {
@@ -546,6 +547,12 @@ function initDomainFilterTabs() {
             if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true);
         });
     });
+}
+
+function toggleDomainAcc(id) {
+    if (domainAccOpen.has(id)) domainAccOpen.delete(id);
+    else domainAccOpen.add(id);
+    if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true);
 }
 
 function renderDomains(domains, targetId, full) {
@@ -561,36 +568,36 @@ function renderDomains(domains, targetId, full) {
         const cloud = filtered.filter(d => !d.local);
         const local = filtered.filter(d => d.local);
 
-        function renderTile(d) {
+        function renderRow(d) {
             const iconContent = getDomainIcon(d.name);
             const isSvg = iconContent && iconContent.startsWith('<svg');
             const href = d.url || `https://${d.fqdn}`;
-            return `
-            <a class="domain-tile ${d.reachable === false ? 'unreachable' : ''}" href="${href}" target="_blank" rel="noopener" title="${d.fqdn}">
-                <div class="domain-tile-icon ${isSvg ? 'domain-tile-icon--logo' : ''}">${iconContent}</div>
-                <div class="domain-tile-name">${d.name}</div>
-                ${d.description ? `<div class="domain-tile-desc">${d.description}</div>` : ''}
-                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}" style="margin-top:6px"></span>
+            return `<a class="domain-row ${d.reachable === false ? 'unreachable' : ''}" href="${href}" target="_blank" rel="noopener">
+                <span class="domain-row-icon ${isSvg ? 'domain-row-icon--svg' : ''}">${iconContent}</span>
+                <span class="domain-row-name">${d.name}</span>
+                <span class="domain-row-fqdn">${d.fqdn}</span>
+                <span class="domain-row-desc">${d.description || ''}</span>
+                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}"></span>
             </a>`;
         }
 
-        let html = '';
-        if (cloud.length) {
-            html += `<div class="domain-section-header">
-                <span class="domain-section-icon">☁️</span>
-                Облако
-                <span class="domain-section-count">${cloud.length}</span>
-            </div>
-            <div class="domain-tiles-grid">${cloud.map(renderTile).join('')}</div>`;
+        function renderAccordion(id, icon, title, items) {
+            if (!items.length) return '';
+            const open = domainAccOpen.has(id);
+            const chevron = `<svg class="domain-acc-chevron ${open ? 'open' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+            return `<div class="domain-accordion">
+                <button class="domain-accordion-header" onclick="toggleDomainAcc('${id}')">
+                    ${chevron}
+                    <span class="domain-section-icon">${icon}</span>
+                    <span class="domain-acc-title">${title}</span>
+                    <span class="domain-section-count">${items.length}</span>
+                </button>
+                ${open ? `<div class="domain-acc-body">${items.map(renderRow).join('')}</div>` : ''}
+            </div>`;
         }
-        if (local.length) {
-            html += `<div class="domain-section-header" style="margin-top:28px">
-                <span class="domain-section-icon">🏠</span>
-                Локальная сеть
-                <span class="domain-section-count">${local.length}</span>
-            </div>
-            <div class="domain-tiles-grid">${local.map(renderTile).join('')}</div>`;
-        }
+
+        const html = renderAccordion('domain-acc-cloud', '☁️', 'Облако', cloud) +
+                     renderAccordion('domain-acc-lan', '🏠', 'Локальная сеть', local);
         el.innerHTML = html || '<div style="color:var(--text-secondary);padding:20px;text-align:center">Нет доменов</div>';
     } else {
         el.innerHTML = domains.filter(d => !d.local).map(d => `
