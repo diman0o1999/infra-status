@@ -27,7 +27,7 @@ jobs:
           source: "infra-status-linux"
           target: "/tmp/"
 
-      - name: Deploy to VM300 via VM100
+      - name: Deploy to VM200 via VM100
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROX_DEV_HOST }}
@@ -35,8 +35,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             chmod +x /tmp/infra-status-linux
-            scp -o StrictHostKeyChecking=no /tmp/infra-status-linux dev@192.168.1.202:/srv/projects/apps/infra-status/infra-status.new
-            ssh -o StrictHostKeyChecking=no dev@192.168.1.202 "mv /srv/projects/apps/infra-status/infra-status.new /srv/projects/apps/infra-status/infra-status && systemctl --user restart infra-status"
+            scp -o StrictHostKeyChecking=no /tmp/infra-status-linux dev@192.168.1.113:/srv/projects/apps/infra-status/infra-status.new
+            ssh -o StrictHostKeyChecking=no dev@192.168.1.113 "mv /srv/projects/apps/infra-status/infra-status.new /srv/projects/apps/infra-status/infra-status && systemctl --user restart infra-status"
             rm -f /tmp/infra-status-linux
 
       - name: Notify Telegram
