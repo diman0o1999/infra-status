@@ -535,24 +535,11 @@ function renderKuma(monitors, targetId) {
 }
 
 // --- Domains ---
-let domainFilter = 'all';
-const domainAccOpen = new Set(['domain-acc-cloud']); // cloud open by default
-
-function initDomainFilterTabs() {
-    document.querySelectorAll('#domainFilterTabs .domain-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            domainFilter = btn.dataset.filter;
-            document.querySelectorAll('#domainFilterTabs .domain-tab').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true);
-        });
-    });
-}
-
-function toggleDomainAcc(id) {
-    if (domainAccOpen.has(id)) domainAccOpen.delete(id);
-    else domainAccOpen.add(id);
-    if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true);
+function initDomainsFilter() {
+    const q = document.getElementById('domainsFilter');
+    const s = document.getElementById('domainsTypeFilter');
+    if (q) q.addEventListener('input', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
+    if (s) s.addEventListener('change', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
 }
 
 function renderDomains(domains, targetId, full) {
@@ -560,45 +547,45 @@ function renderDomains(domains, targetId, full) {
     if (!el || !domains) return;
 
     if (full) {
-        let filtered = domains;
-        if (domainFilter === 'core-stack.ru') filtered = domains.filter(d => !d.local);
-        else if (domainFilter === 'local') filtered = domains.filter(d => d.local);
-        else if (domainFilter === 'down') filtered = domains.filter(d => d.reachable === false);
+        const q = (document.getElementById('domainsFilter')?.value || '').toLowerCase().trim();
+        const typeF = document.getElementById('domainsTypeFilter')?.value || 'all';
 
-        const cloud = filtered.filter(d => !d.local);
-        const local = filtered.filter(d => d.local);
+        const filtered = domains.filter(d => {
+            if (q && !d.name.toLowerCase().includes(q) && !d.fqdn.toLowerCase().includes(q) && !(d.description || '').toLowerCase().includes(q)) return false;
+            if (typeF === 'cloud' && d.local) return false;
+            if (typeF === 'lan' && !d.local) return false;
+            if (typeF === 'down' && d.reachable !== false) return false;
+            return true;
+        });
 
-        function renderRow(d) {
-            const iconContent = getDomainIcon(d.name);
-            const isSvg = iconContent && iconContent.startsWith('<svg');
-            const href = d.url || `https://${d.fqdn}`;
-            return `<a class="domain-row ${d.reachable === false ? 'unreachable' : ''}" href="${href}" target="_blank" rel="noopener">
-                <span class="domain-row-icon ${isSvg ? 'domain-row-icon--svg' : ''}">${iconContent}</span>
-                <span class="domain-row-name">${d.name}</span>
-                <span class="domain-row-fqdn">${d.fqdn}</span>
-                <span class="domain-row-desc">${d.description || ''}</span>
-                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}"></span>
-            </a>`;
-        }
-
-        function renderAccordion(id, icon, title, items) {
-            if (!items.length) return '';
-            const open = domainAccOpen.has(id);
-            const chevron = `<svg class="domain-acc-chevron ${open ? 'open' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
-            return `<div class="domain-accordion">
-                <button class="domain-accordion-header" onclick="toggleDomainAcc('${id}')">
-                    ${chevron}
-                    <span class="domain-section-icon">${icon}</span>
-                    <span class="domain-acc-title">${title}</span>
-                    <span class="domain-section-count">${items.length}</span>
-                </button>
-                ${open ? `<div class="domain-acc-body">${items.map(renderRow).join('')}</div>` : ''}
-            </div>`;
-        }
-
-        const html = renderAccordion('domain-acc-cloud', '☁️', 'Облако', cloud) +
-                     renderAccordion('domain-acc-lan', '🏠', 'Локальная сеть', local);
-        el.innerHTML = html || '<div style="color:var(--text-secondary);padding:20px;text-align:center">Нет доменов</div>';
+        el.innerHTML = `
+            <table class="services-table">
+                <thead>
+                    <tr>
+                        <th style="width:28px"></th>
+                        <th>Домен</th>
+                        <th>Адрес</th>
+                        <th>Описание</th>
+                        <th>Тип</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filtered.length ? filtered.map(d => {
+                        const icon = getDomainIcon(d.name);
+                        const isSvg = icon && icon.startsWith('<svg');
+                        const href = d.url || 'https://' + d.fqdn;
+                        return `<tr style="cursor:pointer" onclick="window.open('${href}','_blank')">
+                            <td><span style="font-size:14px;${isSvg ? 'display:flex' : ''}">${icon}</span></td>
+                            <td style="font-weight:600">${d.name}</td>
+                            <td class="mono" style="font-size:11px;color:var(--text-muted)">${d.fqdn}</td>
+                            <td style="color:var(--text-secondary);font-size:12px">${d.description || '—'}</td>
+                            <td>${d.local ? '🏠 LAN' : '☁️'}</td>
+                            <td><span class="badge ${d.reachable !== false ? 'ok' : 'crit'}">${d.reachable !== false ? 'up' : 'down'}</span></td>
+                        </tr>`;
+                    }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Нет доменов</td></tr>`}
+                </tbody>
+            </table>`;
     } else {
         el.innerHTML = domains.filter(d => !d.local).map(d => `
             <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="${d.url || 'https://' + d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
@@ -1174,7 +1161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initVisibility();
     initWidgets();
     initServicesFilter();
-    initDomainFilterTabs();
+    initDomainsFilter();
     initSearch();
     initReloadConfig();
     initChat();

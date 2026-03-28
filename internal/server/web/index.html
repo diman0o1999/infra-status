@@ -224,13 +224,16 @@
 
         <!-- DOMAINS TAB -->
         <div class="tab-content" id="tab-domains">
-            <div class="domain-filter-tabs" id="domainFilterTabs">
-                <button class="domain-tab active" data-filter="all">Все</button>
-                <button class="domain-tab" data-filter="core-stack.ru">☁️ Облако</button>
-                <button class="domain-tab" data-filter="local">🏠 LAN</button>
-                <button class="domain-tab" data-filter="down">Недоступные</button>
+            <div class="filter-bar">
+                <input class="filter-input" id="domainsFilter" type="search" placeholder="Поиск по домену или описанию...">
+                <select class="filter-select" id="domainsTypeFilter">
+                    <option value="all">Все</option>
+                    <option value="cloud">☁️ Облако</option>
+                    <option value="lan">🏠 LAN</option>
+                    <option value="down">Недоступные</option>
+                </select>
             </div>
-            <div class="domains-full" id="domainsGridFull"></div>
+            <div class="services-table-wrap" id="domainsGridFull"></div>
         </div>
     </main>
 
