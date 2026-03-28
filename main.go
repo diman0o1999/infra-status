@@ -28,7 +28,7 @@ func main() {
 	col := collector.New(cfg, *configPath)
 	defer col.Stop()
 
-	srv := server.New(cfg.Server.Port, col)
+	srv := server.New(cfg.Server.Port, col, cfg.Ollama.URL, cfg.Ollama.Model, cfg.Ollama.Enabled)
 
 	// Wire SSE broadcasts
 	col.OnChange(func(d models.Dashboard) {

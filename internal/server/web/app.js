@@ -676,9 +676,10 @@ function initServicesFilter() {
     if (s) s.addEventListener('change', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
 }
 
-// --- Status Banner ---
+// --- Status Banner (removed from UI, kept as no-op) ---
 function updateBanner(data) {
     const banner = document.getElementById('statusBanner');
+    if (!banner) return;
     let overall = 'ok';
 
     if (data.hosts) {
@@ -1176,9 +1177,92 @@ document.addEventListener('DOMContentLoaded', () => {
     initDomainFilterTabs();
     initSearch();
     initReloadConfig();
+    initChat();
     applyI18n();
     connect();
 });
+
+// --- AI Chat ---
+function initChat() {
+    const fab = document.getElementById('chatFab');
+    const panel = document.getElementById('chatPanel');
+    const closeBtn = document.getElementById('chatClose');
+    const input = document.getElementById('chatInput');
+    const send = document.getElementById('chatSend');
+    const messages = document.getElementById('chatMessages');
+    if (!fab || !panel) return;
+
+    fab.addEventListener('click', () => {
+        const open = panel.classList.toggle('open');
+        if (open) input?.focus();
+    });
+    closeBtn?.addEventListener('click', () => panel.classList.remove('open'));
+
+    async function sendMessage() {
+        const text = input.value.trim();
+        if (!text || send.disabled) return;
+        input.value = '';
+
+        const userEl = document.createElement('div');
+        userEl.className = 'chat-msg user';
+        userEl.textContent = text;
+        messages.appendChild(userEl);
+
+        const aiEl = document.createElement('div');
+        aiEl.className = 'chat-msg assistant streaming';
+        aiEl.textContent = '...';
+        messages.appendChild(aiEl);
+        messages.scrollTop = messages.scrollHeight;
+
+        send.disabled = true;
+        input.disabled = true;
+
+        try {
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text }),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+            aiEl.textContent = '';
+            aiEl.classList.remove('streaming');
+
+            const reader = resp.body.getReader();
+            const dec = new TextDecoder();
+            let buf = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += dec.decode(value, { stream: true });
+                const parts = buf.split('\n\n');
+                buf = parts.pop() || '';
+                for (const part of parts) {
+                    if (!part.startsWith('data: ')) continue;
+                    const payload = part.slice(6);
+                    if (payload === '[DONE]') break;
+                    try {
+                        aiEl.textContent += JSON.parse(payload);
+                        messages.scrollTop = messages.scrollHeight;
+                    } catch {}
+                }
+            }
+        } catch (e) {
+            aiEl.textContent = 'Ошибка: ' + e.message;
+            aiEl.classList.add('error');
+        } finally {
+            send.disabled = false;
+            input.disabled = false;
+            input.focus();
+            messages.scrollTop = messages.scrollHeight;
+        }
+    }
+
+    send?.addEventListener('click', sendMessage);
+    input?.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+}
 
 function initReloadConfig() {
     const btn = document.getElementById('reloadConfigBtn');

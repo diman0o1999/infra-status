@@ -14,6 +14,13 @@ type Config struct {
 	Infrastructure []InfraConfig     `yaml:"infrastructure"`
 	Domains        DomainsConfig     `yaml:"domains"`
 	Kuma           KumaConfig        `yaml:"kuma"`
+	Ollama         OllamaConfig      `yaml:"ollama"`
+}
+
+type OllamaConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	URL     string `yaml:"url"`
+	Model   string `yaml:"model"`
 }
 
 type KumaConfig struct {

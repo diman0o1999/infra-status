@@ -17,17 +17,23 @@ import (
 var webFS embed.FS
 
 type Server struct {
-	port      int
-	collector *collector.Collector
-	clients   map[chan models.Dashboard]struct{}
-	mu        sync.Mutex
+	port        int
+	collector   *collector.Collector
+	clients     map[chan models.Dashboard]struct{}
+	mu          sync.Mutex
+	ollamaURL   string
+	ollamaModel string
+	ollamaOn    bool
 }
 
-func New(port int, col *collector.Collector) *Server {
+func New(port int, col *collector.Collector, ollamaURL, ollamaModel string, ollamaOn bool) *Server {
 	return &Server{
-		port:      port,
-		collector: col,
-		clients:   make(map[chan models.Dashboard]struct{}),
+		port:        port,
+		collector:   col,
+		clients:     make(map[chan models.Dashboard]struct{}),
+		ollamaURL:   ollamaURL,
+		ollamaModel: ollamaModel,
+		ollamaOn:    ollamaOn,
 	}
 }
 
@@ -54,6 +60,9 @@ func (s *Server) Start() error {
 
 	// Config hot-reload
 	mux.HandleFunc("/api/reload", s.handleReload)
+
+	// AI Chat (RAG over infra state)
+	mux.HandleFunc("/api/chat", s.handleChat)
 
 	// Static files (embedded)
 	webContent, err := fs.Sub(webFS, "web")
