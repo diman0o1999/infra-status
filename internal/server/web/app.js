@@ -125,12 +125,28 @@ function setTheme(theme) {
 
 // --- Icons ---
 const ICONS = {
-    'truck': '\u{1F69B}', 'factory': '\u{1F3ED}', 'heart-pulse': '\u{1F4AB}',
-    'stethoscope': '\u{1FA7A}', 'book-open': '\u{1F4D6}', 'map-pin': '\u{1F4CD}',
-    'clipboard-list': '\u{1F4CB}',
+    'truck': '🚛', 'factory': '🏭', 'heart-pulse': '💫',
+    'stethoscope': '🩺', 'book-open': '📖', 'map-pin': '📍',
+    'clipboard-list': '📋',
 };
 
-function getIcon(name) { return ICONS[name] || '\u{1F4E6}'; }
+function getIcon(name) { return ICONS[name] || '📦'; }
+
+const DOMAIN_EMOJI = {
+    'cargo': '🚛', 'cargo-api': '🚛',
+    'fabro': '🏭', 'fabro-api': '🏭',
+    'puls': '💫', 'puls-api': '💫',
+    'emedic': '🩺', 'emedic-api': '🩺',
+    'skazki': '📖', 'skazki-api': '📖',
+    'kraeved': '📍', 'kraeved-api': '📍',
+    'logist23': '📋', 'logist23-api': '📋',
+    'racia': '📻', 'racia-api': '📻',
+    'info': '📊', 'status': '💚', 'grafana': '📈',
+    'errors': '🐛', 'logs': '📝', 's3': '🗄️', 'ai': '🤖',
+    'search': '🔍', 'admin': '⚙️', 'cdn': '⚡',
+};
+
+function getDomainIcon(name) { return DOMAIN_EMOJI[name] || '🌐'; }
 
 function formatBytes(bytes) {
     if (!bytes) return '0 B';
@@ -406,18 +422,24 @@ function renderDomains(domains, targetId, full) {
     const el = document.getElementById(targetId);
     if (!el || !domains) return;
 
-    // Domains are static — only render once
-    if (el.children.length) return;
-
     if (full) {
         el.innerHTML = domains.map(d => `
-            <a class="domain-tag-full" href="https://${d.fqdn}" target="_blank">
-                <span class="domain-fqdn">${d.fqdn}</span>
-                <span class="domain-desc">${d.description}</span>
+            <a class="domain-card ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" rel="noopener">
+                <div class="domain-card-top">
+                    <span class="domain-card-icon">${getDomainIcon(d.name)}</span>
+                    <div class="domain-card-info">
+                        <div class="domain-card-name">${d.name}</div>
+                        <div class="domain-card-fqdn">${d.fqdn}</div>
+                    </div>
+                    <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}"></span>
+                </div>
+                ${d.description ? `<div class="domain-card-desc">${d.description}</div>` : ''}
+                ${d.host ? `<div class="domain-card-meta"><span class="domain-vm-badge">${d.host}</span></div>` : ''}
             </a>`).join('');
     } else {
         el.innerHTML = domains.map(d => `
-            <a class="domain-tag" href="https://${d.fqdn}" target="_blank" title="${d.description}">
+            <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
+                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}" style="flex-shrink:0;margin-right:2px"></span>
                 ${d.name}
             </a>`).join('');
     }
@@ -447,45 +469,48 @@ function renderServicesTable(data, targetId) {
 
     rows.sort((a, b) => b.memory - a.memory);
 
-    // For table: check if rows count changed, otherwise update in-place
-    const tbody = el.querySelector('tbody');
-    if (!tbody || tbody.children.length !== rows.length) {
-        el.innerHTML = `
-            <table class="services-table">
-                <thead>
+    // Apply filter
+    const q = (document.getElementById('servicesFilter')?.value || '').toLowerCase().trim();
+    const stateF = document.getElementById('servicesStateFilter')?.value || 'all';
+    const filtered = rows.filter(r => {
+        if (q && !r.service.toLowerCase().includes(q) && !(r.host || '').toLowerCase().includes(q)) return false;
+        if (stateF === 'active' && !r.active) return false;
+        if (stateF === 'inactive' && r.active) return false;
+        return true;
+    });
+
+    el.innerHTML = `
+        <table class="services-table">
+            <thead>
+                <tr>
+                    <th>${t('col_service')}</th>
+                    <th>${t('col_host')}</th>
+                    <th>${t('col_level')}</th>
+                    <th>${t('col_port')}</th>
+                    <th>RAM</th>
+                    <th>${t('col_state')}</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${filtered.length ? filtered.map(r => `
                     <tr>
-                        <th>${t('col_service')}</th>
-                        <th>${t('col_host')}</th>
-                        <th>${t('col_level')}</th>
-                        <th>${t('col_port')}</th>
-                        <th>RAM</th>
-                        <th>${t('col_state')}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rows.map(r => `
-                        <tr data-svc-row="${r.service}">
-                            <td>${r.service}</td>
-                            <td>${r.host}</td>
-                            <td>${r.level || '-'}</td>
-                            <td>${r.port || '-'}</td>
-                            <td class="mono" data-svc-mem>${r.memory ? formatBytes(r.memory) : '-'}</td>
-                            <td><span class="badge ${r.active ? 'ok' : 'crit'}" data-svc-state>${r.active ? t('active') : t('inactive')}</span></td>
-                        </tr>`).join('')}
-                </tbody>
-            </table>`;
-    } else {
-        rows.forEach(r => {
-            const row = el.querySelector(`[data-svc-row="${r.service}"]`);
-            if (!row) return;
-            setText(row.querySelector('[data-svc-mem]'), r.memory ? formatBytes(r.memory) : '-');
-            const stateEl = row.querySelector('[data-svc-state]');
-            if (stateEl) {
-                setClass(stateEl, 'badge ' + (r.active ? 'ok' : 'crit'));
-                setText(stateEl, r.active ? t('active') : t('inactive'));
-            }
-        });
-    }
+                        <td>${r.service}</td>
+                        <td>${r.host}</td>
+                        <td>${r.level || '-'}</td>
+                        <td>${r.port || '-'}</td>
+                        <td class="mono">${r.memory ? formatBytes(r.memory) : '-'}</td>
+                        <td><span class="badge ${r.active ? 'ok' : 'crit'}">${r.active ? t('active') : t('inactive')}</span></td>
+                    </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Нет сервисов</td></tr>`}
+            </tbody>
+        </table>`;
+}
+
+// --- Services Filter ---
+function initServicesFilter() {
+    const q = document.getElementById('servicesFilter');
+    const s = document.getElementById('servicesStateFilter');
+    if (q) q.addEventListener('input', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
+    if (s) s.addEventListener('change', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
 }
 
 function updateBanner(data) {
@@ -550,15 +575,42 @@ function render(data) {
     document.getElementById('errorOverlay').classList.remove('visible');
 }
 
+// --- Routing ---
+const VALID_TABS = ['overview', 'hosts', 'projects', 'services', 'domains'];
+
+function switchTab(tabId) {
+    if (!VALID_TABS.includes(tabId)) tabId = 'overview';
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const tab = document.querySelector(`.tab[data-tab="${tabId}"]`);
+    const content = document.getElementById('tab-' + tabId);
+    if (tab) tab.classList.add('active');
+    if (content) content.classList.add('active');
+    if (location.hash !== '#' + tabId) history.pushState(null, '', '#' + tabId);
+}
+
 // --- Tabs ---
 function initTabs() {
     document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-        });
+        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+    });
+    const hash = location.hash.slice(1);
+    if (hash && VALID_TABS.includes(hash)) switchTab(hash);
+    window.addEventListener('popstate', () => {
+        const h = location.hash.slice(1);
+        switchTab(VALID_TABS.includes(h) ? h : 'overview');
+    });
+}
+
+// --- Stat Cards Navigation ---
+function initStatCards() {
+    const map = { statHosts: 'hosts', statProjects: 'projects', statServices: 'services', statDomains: 'domains' };
+    Object.entries(map).forEach(([id, tab]) => {
+        const card = document.getElementById(id)?.closest('.stat-card');
+        if (card) {
+            card.classList.add('clickable');
+            card.addEventListener('click', () => switchTab(tab));
+        }
     });
 }
 
@@ -769,9 +821,11 @@ function restoreLayout() {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initTabs();
+    initStatCards();
     initLang();
     initVisibility();
     initWidgets();
+    initServicesFilter();
     applyI18n();
     connect();
 });

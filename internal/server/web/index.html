@@ -209,6 +209,14 @@
 
         <!-- SERVICES TAB -->
         <div class="tab-content" id="tab-services">
+            <div class="filter-bar">
+                <input class="filter-input" id="servicesFilter" type="search" placeholder="Фильтр по сервису или хосту...">
+                <select class="filter-select" id="servicesStateFilter">
+                    <option value="all">Все</option>
+                    <option value="active">Активные</option>
+                    <option value="inactive">Неактивные</option>
+                </select>
+            </div>
             <div class="services-table-wrap" id="servicesTable"></div>
         </div>
 
