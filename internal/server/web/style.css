@@ -1697,6 +1697,110 @@ body.edit-mode .widget-actions {
     color: white;
 }
 
+/* --- Domain Tiles (launchpad layout) --- */
+.domain-tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.domain-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 16px 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    cursor: pointer;
+}
+
+.domain-tile:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.domain-tile.unreachable {
+    opacity: 0.4;
+}
+
+.domain-tile-icon {
+    font-size: 26px;
+    line-height: 1;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.domain-tile-icon--logo {
+    background: transparent;
+    padding: 2px;
+}
+
+.domain-tile-icon--logo svg {
+    width: 42px;
+    height: 42px;
+}
+
+.domain-tile-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
+}
+
+.domain-tile-desc {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    margin-top: 3px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Domain section headers (Cloud / Local) */
+.domain-section-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.domain-section-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.domain-section-count {
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--bg-tertiary);
+    border-radius: 20px;
+    padding: 1px 8px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+}
+
 /* Host IP highlight */
 .host-ip {
     font-family: 'JetBrains Mono', monospace;

@@ -282,3 +282,40 @@ domains:
       description: "Meilisearch"
     - name: info
       description: "Инфра-дашборд"
+
+  custom:
+    - name: proxmox
+      fqdn: 192.168.1.71:8006
+      url: https://192.168.1.71:8006
+      description: "Proxmox VE — гипервизор"
+      local: true
+
+    - name: minio-console
+      fqdn: 192.168.1.202:9001
+      url: http://192.168.1.202:9001
+      description: "MinIO Console — S3 хранилище"
+      local: true
+
+    - name: grafana-lan
+      fqdn: 192.168.1.202:3200
+      url: http://192.168.1.202:3200
+      description: "Grafana — метрики (LAN)"
+      local: true
+
+    - name: planka-lan
+      fqdn: 192.168.1.202:3004
+      url: http://192.168.1.202:3004
+      description: "Planka — канбан (LAN)"
+      local: true
+
+    - name: glitchtip-lan
+      fqdn: 192.168.1.202:3002
+      url: http://192.168.1.202:3002
+      description: "GlitchTip — ошибки (LAN)"
+      local: true
+
+    - name: ollama-lan
+      fqdn: 192.168.1.112:11434
+      url: http://192.168.1.112:11434
+      description: "Ollama — LLM на GPU (LAN)"
+      local: true

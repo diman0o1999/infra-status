@@ -554,31 +554,47 @@ function renderDomains(domains, targetId, full) {
 
     if (full) {
         let filtered = domains;
-        if (domainFilter === 'core-stack.ru') filtered = domains.filter(d => d.fqdn && d.fqdn.endsWith('.core-stack.ru'));
-        else if (domainFilter === 'local') filtered = domains.filter(d => d.fqdn && (d.fqdn.endsWith('.local') || !d.fqdn.includes('.')));
+        if (domainFilter === 'core-stack.ru') filtered = domains.filter(d => !d.local);
+        else if (domainFilter === 'local') filtered = domains.filter(d => d.local);
         else if (domainFilter === 'down') filtered = domains.filter(d => d.reachable === false);
 
-        el.innerHTML = filtered.map(d => {
+        const cloud = filtered.filter(d => !d.local);
+        const local = filtered.filter(d => d.local);
+
+        function renderTile(d) {
             const iconContent = getDomainIcon(d.name);
-            // Check if it's an SVG (project logo) or emoji
             const isSvg = iconContent && iconContent.startsWith('<svg');
+            const href = d.url || `https://${d.fqdn}`;
             return `
-            <a class="domain-card ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" rel="noopener">
-                <div class="domain-card-top">
-                    <span class="domain-card-icon ${isSvg ? 'domain-card-icon--logo' : ''}">${iconContent}</span>
-                    <div class="domain-card-info">
-                        <div class="domain-card-name">${d.name}</div>
-                        <div class="domain-card-fqdn">${d.fqdn}</div>
-                    </div>
-                    <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}"></span>
-                </div>
-                ${d.description ? `<div class="domain-card-desc">${d.description}</div>` : ''}
-                ${d.host ? `<div class="domain-card-meta"><span class="domain-vm-badge">${d.host}</span></div>` : ''}
+            <a class="domain-tile ${d.reachable === false ? 'unreachable' : ''}" href="${href}" target="_blank" rel="noopener" title="${d.fqdn}">
+                <div class="domain-tile-icon ${isSvg ? 'domain-tile-icon--logo' : ''}">${iconContent}</div>
+                <div class="domain-tile-name">${d.name}</div>
+                ${d.description ? `<div class="domain-tile-desc">${d.description}</div>` : ''}
+                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}" style="margin-top:6px"></span>
             </a>`;
-        }).join('');
+        }
+
+        let html = '';
+        if (cloud.length) {
+            html += `<div class="domain-section-header">
+                <span class="domain-section-icon">☁️</span>
+                Облако
+                <span class="domain-section-count">${cloud.length}</span>
+            </div>
+            <div class="domain-tiles-grid">${cloud.map(renderTile).join('')}</div>`;
+        }
+        if (local.length) {
+            html += `<div class="domain-section-header" style="margin-top:28px">
+                <span class="domain-section-icon">🏠</span>
+                Локальная сеть
+                <span class="domain-section-count">${local.length}</span>
+            </div>
+            <div class="domain-tiles-grid">${local.map(renderTile).join('')}</div>`;
+        }
+        el.innerHTML = html || '<div style="color:var(--text-secondary);padding:20px;text-align:center">Нет доменов</div>';
     } else {
-        el.innerHTML = domains.map(d => `
-            <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="https://${d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
+        el.innerHTML = domains.filter(d => !d.local).map(d => `
+            <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="${d.url || 'https://' + d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
                 <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}" style="flex-shrink:0;margin-right:2px"></span>
                 ${d.name}
             </a>`).join('');

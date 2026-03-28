@@ -75,14 +75,23 @@ type InfraConfig struct {
 }
 
 type DomainsConfig struct {
-	Base       string            `yaml:"base"`
-	IP         string            `yaml:"ip"`
-	Subdomains []SubdomainConfig `yaml:"subdomains"`
+	Base       string             `yaml:"base"`
+	IP         string             `yaml:"ip"`
+	Subdomains []SubdomainConfig  `yaml:"subdomains"`
+	Custom     []CustomDomain     `yaml:"custom"`
 }
 
 type SubdomainConfig struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+}
+
+type CustomDomain struct {
+	Name        string `yaml:"name"`
+	FQDN        string `yaml:"fqdn"`
+	URL         string `yaml:"url"`         // full link URL (e.g. http://192.168.1.71:8006)
+	Description string `yaml:"description"`
+	Local       bool   `yaml:"local"`
 }
 
 func Load(path string) (*Config, error) {

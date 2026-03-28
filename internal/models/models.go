@@ -70,9 +70,11 @@ type InfraService struct {
 type DomainInfo struct {
 	Name        string `json:"name"`
 	FQDN        string `json:"fqdn"`
+	URL         string `json:"url,omitempty"`  // override link (for local/LAN domains)
 	Description string `json:"description"`
 	Reachable   bool   `json:"reachable"`
 	Host        string `json:"host,omitempty"` // which VM's nginx serves this domain
+	Local       bool   `json:"local,omitempty"` // true = LAN-only, not public
 }
 
 // KumaMonitor holds Uptime Kuma monitor data

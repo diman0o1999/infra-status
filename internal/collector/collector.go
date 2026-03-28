@@ -268,6 +268,22 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 		}
 	}
 
+	// Add custom (local/LAN) domains from config
+	for _, cd := range c.cfg.Domains.Custom {
+		if seen[cd.FQDN] {
+			continue
+		}
+		seen[cd.FQDN] = true
+		domains = append(domains, models.DomainInfo{
+			Name:        cd.Name,
+			FQDN:        cd.FQDN,
+			URL:         cd.URL,
+			Description: cd.Description,
+			Reachable:   true,
+			Local:       cd.Local,
+		})
+	}
+
 	return domains
 }
 
