@@ -258,8 +258,14 @@ domains:
       description: "Logist23 Web"
     - name: logist23-api
       description: "Logist23 API"
+    - name: racia
+      description: "Racia Web"
+    - name: api.racia
+      description: "Racia API"
+    - name: tasks
+      description: "Planka — канбан доски"
     - name: status
-      description: "Этот дашборд"
+      description: "Uptime Kuma"
     - name: grafana
       description: "Grafana"
     - name: admin
@@ -267,12 +273,12 @@ domains:
     - name: ai
       description: "AI сервисы"
     - name: errors
-      description: "Error tracking"
+      description: "GlitchTip — ошибки"
     - name: logs
-      description: "Логи (Loki)"
+      description: "Grafana Loki"
     - name: s3
-      description: "Object storage"
+      description: "MinIO S3"
     - name: search
-      description: "Поиск"
+      description: "Meilisearch"
     - name: info
-      description: "Инфо"
+      description: "Инфра-дашборд"
