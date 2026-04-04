@@ -199,9 +199,17 @@ func (c *Collector) collectProject(p config.ProjectConfig) models.ProjectStatus 
 		})
 	}
 
-	// HTTP health checks
-	webResult := c.http.Check(p.URLs.Web)
-	apiResult := c.http.Check(p.URLs.API)
+	// HTTP health checks — prefer local URLs (public URLs fail due to hairpin NAT)
+	webCheckURL := p.LocalURLs.Web
+	if webCheckURL == "" {
+		webCheckURL = p.URLs.Web
+	}
+	apiCheckURL := p.LocalURLs.API
+	if apiCheckURL == "" {
+		apiCheckURL = p.URLs.API
+	}
+	webResult := c.http.Check(webCheckURL)
+	apiResult := c.http.Check(apiCheckURL)
 	ps.WebUp = webResult.Up
 	ps.ApiUp = apiResult.Up
 	ps.WebStatus = webResult.Status

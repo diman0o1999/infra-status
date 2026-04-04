@@ -70,8 +70,8 @@ projects:
       web: https://cargo.core-stack.ru
       api: https://cargo-api.core-stack.ru
     local_urls:
-      web: http://192.168.1.112:8080
-      api: http://192.168.1.112:3000
+      web: https://api.cargo.local
+      api: https://api.cargo.local
     accounts:
       - email: volkov@rosagro-trade.ru
         password: "Demo1234!"
@@ -101,8 +101,8 @@ projects:
       web: https://fabro.core-stack.ru
       api: https://fabro-api.core-stack.ru
     local_urls:
-      web: ""
-      api: ""
+      web: https://api.fabro.local
+      api: https://api.fabro.local
     accounts:
       - email: admin@fabro.local
         password: "password123"
@@ -121,12 +121,9 @@ projects:
         role: supplier
         note: Поставщик
     services:
-      user:
+      system:
         - fabro-api
-        - fabro-web
         - fabro-sidekiq
-        - fabro-anycable-rpc
-        - fabro-anycable-go
     host: prox-dev
 
   - name: Puls
@@ -137,8 +134,8 @@ projects:
       web: https://puls.core-stack.ru
       api: https://puls-api.core-stack.ru
     local_urls:
-      web: http://192.168.1.112:3051
-      api: http://192.168.1.112:3050
+      web: https://api.puls.local
+      api: https://api.puls.local
     accounts:
       - email: admin@puls.local
         password: "password123"
@@ -149,9 +146,8 @@ projects:
         role: user
         note: Пользователь
     services:
-      user:
+      system:
         - puls-backend
-        - puls-frontend
     host: prox-dev
 
   - name: e-medic
@@ -162,8 +158,8 @@ projects:
       web: https://emedic.core-stack.ru
       api: https://emedic-api.core-stack.ru
     local_urls:
-      web: http://192.168.1.112:3002
-      api: http://192.168.1.112:3001
+      web: https://api.emedic.local
+      api: https://api.emedic.local
     accounts:
       - email: admin@emedic.app
         password: "admin123"
@@ -176,7 +172,6 @@ projects:
     services:
       system:
         - emedic-api
-        - emedic-web
         - emedic-queue
     host: prox-dev
 
@@ -188,8 +183,8 @@ projects:
       web: https://skazki.core-stack.ru
       api: https://skazki-api.core-stack.ru
     local_urls:
-      web: http://192.168.1.112:3091
-      api: http://192.168.1.112:3090
+      web: https://api.skazki.local
+      api: https://api.skazki.local
     accounts:
       - email: admin@skazki.local
         password: "password123"
@@ -200,7 +195,9 @@ projects:
         role: parent
         note: Родитель (тест)
     services:
-      user: []
+      system:
+        - skazki-api
+        - skazki-sidekiq
     host: prox-dev
 
   - name: Краевед
@@ -234,8 +231,8 @@ projects:
       web: https://logist23.core-stack.ru
       api: https://logist23-api.core-stack.ru
     local_urls:
-      web: ""
-      api: ""
+      web: https://logist23.local
+      api: https://logist23.local
     accounts:
       - email: admin@logist23.local
         password: "password"
@@ -261,17 +258,16 @@ projects:
       web: https://racia.core-stack.ru
       api: https://racia-api.core-stack.ru
     local_urls:
-      web: ""
-      api: ""
+      web: https://api.racia.local
+      api: https://api.racia.local
     accounts:
       - email: admin@racia.local
         password: "password123"
         role: admin
         note: Администратор
     services:
-      user:
+      system:
         - racia-api
-        - racia-web
     host: prox-dev
 
 
@@ -284,15 +280,16 @@ projects:
       web: https://nocta.core-stack.ru
       api: https://nocta.core-stack.ru
     local_urls:
-      web: http://192.168.1.112:3070
-      api: http://192.168.1.112:3070
+      web: https://phantom.local
+      api: https://phantom.local
     accounts:
       - email: admin@nocta.local
         password: "password123"
         role: admin
         note: Администратор
     services:
-      user: []
+      system:
+        - vpn-backend
     host: prox-dev
 infrastructure:
   - name: PostgreSQL
