@@ -358,7 +358,7 @@ func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 			if colonIdx > 0 {
 				name := strings.TrimSpace(trimmed[:colonIdx])
 				if boardSensorNames[name] {
-					if temp := parseTempValue(trimmed); temp > 0 {
+					if temp := parseTempValue(trimmed); temp >= 10 && temp < 120 {
 						sr := models.SensorReading{Name: name, Value: temp}
 						sr.High = parseLimitValue(trimmed, "high")
 						sr.Crit = parseLimitValue(trimmed, "crit")
@@ -398,7 +398,7 @@ func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 							}
 						}
 					}
-					if volts > 0 {
+					if volts >= 0.05 {
 						info.Voltages = append(info.Voltages, models.SensorReading{
 							Name:  name,
 							Value: volts,
@@ -417,6 +417,9 @@ func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 				if temp := parseTempValue(trimmed); temp > -270 && temp != 0 {
 					sr := models.SensorReading{Name: name, Value: temp}
 					sr.High = parseLimitValue(trimmed, "high")
+					if sr.High > 200 {
+						sr.High = 0 // sentinel value (65261.8°C = no limit set)
+					}
 					sr.Crit = parseLimitValue(trimmed, "crit")
 					info.NVMe = append(info.NVMe, sr)
 				}
