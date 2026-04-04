@@ -78,8 +78,8 @@ type ProjectStatus struct {
 	Icon        string          `json:"icon"`
 	Description string          `json:"description"`
 	Purpose     string          `json:"purpose"`
-	Login       string          `json:"login,omitempty"`
-	Password    string          `json:"password,omitempty"`
+	Login       string          `json:"-"` // never expose credentials
+	Password    string          `json:"-"` // never expose credentials
 	WebURL      string          `json:"web_url"`
 	ApiURL      string          `json:"api_url"`
 	LocalWeb    string          `json:"local_web,omitempty"`
@@ -114,8 +114,8 @@ type DomainInfo struct {
 	Reachable   bool   `json:"reachable"`
 	Host        string `json:"host,omitempty"`
 	Local       bool   `json:"local,omitempty"`
-	Login       string `json:"login,omitempty"`
-	Password    string `json:"password,omitempty"`
+	Login       string `json:"-"` // never expose credentials
+	Password    string `json:"-"` // never expose credentials
 }
 
 // KumaMonitor holds Uptime Kuma monitor data
@@ -148,7 +148,7 @@ type Dashboard struct {
 
 type Account struct {
 	Email    string `json:"email"`
-	Password string `json:"password"`
+	Password string `json:"-"` // never expose credentials
 	Role     string `json:"role"`
 	Note     string `json:"note"`
 }

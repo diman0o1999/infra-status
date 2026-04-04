@@ -13,6 +13,20 @@ import (
 	"infra-status/internal/models"
 )
 
+// Shell commands executed on remote hosts via SSH.
+// Defined as constants so they can be referenced in tests and updated in one place.
+const (
+	cmdCPUUsage     = `top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1`
+	cmdRAMUsage     = `free -b | awk '/Mem:/ {printf "%d %d", $2, $3}'`
+	cmdDiskUsage    = `df -B1 / | awk 'NR==2 {printf "%d %d", $2, $3}'`
+	cmdLoadAvg      = `cat /proc/loadavg | awk '{print $1, $2, $3}'`
+	cmdUptime       = `uptime -p`
+	cmdSwapUsage    = `free -b | awk '/Swap:/ {printf "%d %d", $2, $3}'`
+	cmdProcCount    = `ps aux --no-heading 2>/dev/null | wc -l`
+	cmdSensors      = `sensors 2>/dev/null`
+	cmdNginxDomains = `grep -rh 'server_name' /etc/nginx/sites-enabled/ 2>/dev/null | grep -v '#' | sed 's/server_name//g;s/;//g' | tr ' \t' '\n\n' | grep '\.' | grep -v '^_' | sort -u`
+)
+
 type SSHCollector struct {
 	hosts   []config.HostConfig
 	clients map[string]*ssh.Client
@@ -99,7 +113,7 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	m.Online = true
 
 	// CPU usage (average across cores)
-	cpuOut, err := c.runCommand(client, `top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1`)
+	cpuOut, err := c.runCommand(client, cmdCPUUsage)
 	if err == nil {
 		if v, e := strconv.ParseFloat(strings.Replace(cpuOut, ",", ".", 1), 64); e == nil {
 			m.CPU = v
@@ -107,7 +121,7 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	}
 
 	// RAM
-	ramOut, err := c.runCommand(client, `free -b | awk '/Mem:/ {printf "%d %d", $2, $3}'`)
+	ramOut, err := c.runCommand(client, cmdRAMUsage)
 	if err == nil {
 		parts := strings.Fields(ramOut)
 		if len(parts) == 2 {
@@ -122,7 +136,7 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	}
 
 	// Disk
-	diskOut, err := c.runCommand(client, `df -B1 / | awk 'NR==2 {printf "%d %d", $2, $3}'`)
+	diskOut, err := c.runCommand(client, cmdDiskUsage)
 	if err == nil {
 		parts := strings.Fields(diskOut)
 		if len(parts) == 2 {
@@ -137,13 +151,13 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	}
 
 	// Load average
-	loadOut, err := c.runCommand(client, `cat /proc/loadavg | awk '{print $1, $2, $3}'`)
+	loadOut, err := c.runCommand(client, cmdLoadAvg)
 	if err == nil {
 		m.Load = loadOut
 	}
 
 	// Uptime
-	uptimeOut, err := c.runCommand(client, `uptime -p`)
+	uptimeOut, err := c.runCommand(client, cmdUptime)
 	if err == nil {
 		m.Uptime = strings.TrimPrefix(uptimeOut, "up ")
 	}
@@ -154,7 +168,7 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	}
 
 	// Swap usage
-	swapOut, err := c.runCommand(client, `free -b | awk '/Swap:/ {printf "%d %d", $2, $3}'`)
+	swapOut, err := c.runCommand(client, cmdSwapUsage)
 	if err == nil {
 		parts := strings.Fields(swapOut)
 		if len(parts) == 2 {
@@ -171,7 +185,7 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	}
 
 	// Process count
-	procsOut, err := c.runCommand(client, `ps aux --no-heading 2>/dev/null | wc -l`)
+	procsOut, err := c.runCommand(client, cmdProcCount)
 	if err == nil {
 		if v, e := strconv.Atoi(strings.TrimSpace(procsOut)); e == nil {
 			m.Procs = v
@@ -255,9 +269,7 @@ func (c *SSHCollector) CollectNginxDomains(host config.HostConfig) []string {
 	if err != nil {
 		return nil
 	}
-	out, err := c.runCommand(client,
-		`grep -rh 'server_name' /etc/nginx/sites-enabled/ 2>/dev/null | grep -v '#' | sed 's/server_name//g;s/;//g' | tr ' \t' '\n\n' | grep '\.' | grep -v '^_' | sort -u`,
-	)
+	out, err := c.runCommand(client, cmdNginxDomains)
 	if err != nil {
 		return nil
 	}
@@ -274,7 +286,7 @@ func (c *SSHCollector) CollectNginxDomains(host config.HostConfig) []string {
 func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 	info := models.ThermalInfo{}
 
-	out, err := c.runCommand(client, "sensors 2>/dev/null")
+	out, err := c.runCommand(client, cmdSensors)
 	if err != nil || strings.TrimSpace(out) == "" {
 		return info
 	}

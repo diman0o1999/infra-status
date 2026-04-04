@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,8 @@ const systemPrompt = `Ты ИИ-ассистент по мониторингу �
 Отвечай кратко и по делу, на русском языке.
 Ниже — актуальное состояние серверов и сервисов на момент вопроса.
 `
+
+const maxChatBodyBytes = 4096 // 4 KB — sufficient for any reasonable message
 
 func buildInfraContext(state models.Dashboard) string {
 	var sb strings.Builder
@@ -72,6 +75,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enforce a request body size limit to prevent abuse
+	r.Body = http.MaxBytesReader(w, r.Body, maxChatBodyBytes)
+
 	var req struct {
 		Message string `json:"message"`
 	}
@@ -93,11 +99,24 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		"think":  false,
 	}
 
-	body, _ := json.Marshal(payload)
-	httpReq, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, s.ollamaURL+"/api/chat", bytes.NewReader(body))
+	body, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("failed to marshal ollama payload", "error", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.ollamaURL+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		slog.Error("failed to build ollama request", "error", err)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
+
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
+		slog.Warn("ollama request failed", "error", err)
 		http.Error(w, `{"error":"ollama unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
@@ -111,7 +130,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	s.setCORSHeaders(w, r)
 
 	type ollamaChunk struct {
 		Message struct {
@@ -131,14 +150,25 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if chunk.Message.Content != "" {
-			token, _ := json.Marshal(chunk.Message.Content)
-			fmt.Fprintf(w, "data: %s\n\n", token)
+			token, err := json.Marshal(chunk.Message.Content)
+			if err != nil {
+				slog.Error("failed to marshal chat token", "error", err)
+				continue
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", token); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
 		if chunk.Done {
-			fmt.Fprintf(w, "data: [DONE]\n\n")
+			if _, err := fmt.Fprintf(w, "data: [DONE]\n\n"); err != nil {
+				return
+			}
 			flusher.Flush()
 			break
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Warn("ollama scanner error", "error", err)
 	}
 }

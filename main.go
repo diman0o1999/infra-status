@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,21 +14,32 @@ import (
 )
 
 func main() {
+	// Structured JSON logging for production — parseable by Loki, Grafana, etc.
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
-	log.Printf("Loaded config: %d hosts, %d projects, %d infra services, %d domains",
-		len(cfg.Hosts), len(cfg.Projects), len(cfg.Infrastructure), len(cfg.Domains.Subdomains))
+	slog.Info("config loaded",
+		"hosts", len(cfg.Hosts),
+		"projects", len(cfg.Projects),
+		"infra_services", len(cfg.Infrastructure),
+		"domains", len(cfg.Domains.Subdomains),
+	)
 
 	col := collector.New(cfg, *configPath)
 	defer col.Stop()
 
-	srv := server.New(cfg.Server.Port, col, cfg.Ollama.URL, cfg.Ollama.Model, cfg.Ollama.Enabled)
+	srv := server.New(cfg, col)
 
 	// Wire SSE broadcasts
 	col.OnChange(func(d models.Dashboard) {
@@ -41,13 +52,14 @@ func main() {
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		log.Println("Shutting down...")
+		sig := <-sigCh
+		slog.Info("shutting down", "signal", sig.String())
 		col.Stop()
 		os.Exit(0)
 	}()
 
 	if err := srv.Start(); err != nil {
-		log.Fatalf("Server error: %v", err)
+		slog.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

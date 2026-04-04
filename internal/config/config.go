@@ -41,6 +41,7 @@ type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	RefreshInterval time.Duration `yaml:"refresh_interval"`
 	Env             string        `yaml:"env"` // "dev" or "prod"
+	AllowedOrigins  []string      `yaml:"allowed_origins"`
 }
 
 type HostConfig struct {

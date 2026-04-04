@@ -1,7 +1,7 @@
 package collector
 
 import (
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -142,7 +142,7 @@ func (c *Collector) collect() {
 	if c.kuma != nil {
 		kumaData, err := c.kuma.Collect()
 		if err != nil {
-			log.Printf("Kuma collect error: %v", err)
+			slog.Warn("kuma collect failed", "error", err)
 		} else {
 			for _, km := range kumaData {
 				dashboard.Kuma = append(dashboard.Kuma, models.KumaMonitor{
@@ -174,7 +174,7 @@ func (c *Collector) collect() {
 		c.onChange(dashboard)
 	}
 
-	log.Printf("Collection done in %s", time.Since(start))
+	slog.Info("collection complete", "duration_ms", time.Since(start).Milliseconds())
 }
 
 func (c *Collector) collectProject(p config.ProjectConfig) models.ProjectStatus {

@@ -2,6 +2,45 @@
    core-stack.art — Infrastructure Dashboard
    ============================================ */
 
+// --- Constants ---
+const ANIMATION_DURATION_MS = 300;
+const SSE_RECONNECT_BASE_DELAY_MS = 3000;
+const SSE_RECONNECT_MAX_DELAY_MS = 30000;
+const SEARCH_DEBOUNCE_MS = 150;
+const COPY_TOAST_DURATION_MS = 2500;
+const SSE_ERROR_OVERLAY_THRESHOLD = 2;
+
+// --- XSS helpers ---
+/**
+ * Escape a value for safe insertion inside an HTML template literal.
+ * Use inside `${}` when building innerHTML strings.
+ */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+/**
+ * Create element with attributes and children.
+ * Text children are automatically escaped.
+ */
+function el(tag, attrs = {}, ...children) {
+    const elem = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'className') elem.className = v;
+        else if (k === 'dataset') Object.assign(elem.dataset, v);
+        else if (k.startsWith('on')) elem.addEventListener(k.slice(2).toLowerCase(), v);
+        else elem.setAttribute(k, v);
+    }
+    for (const child of children) {
+        if (typeof child === 'string') elem.appendChild(document.createTextNode(child));
+        else if (child instanceof Node) elem.appendChild(child);
+    }
+    return elem;
+}
+
 // --- i18n ---
 const I18N = {
     ru: {
@@ -122,14 +161,28 @@ const I18N = {
     }
 };
 
-let currentLang = localStorage.getItem('lang') || 'ru';
+// --- Application State ---
+const state = {
+    lang: localStorage.getItem('lang') || 'ru',
+    data: null,              // last received SSE payload (mirrors lastData)
+    searchIndex: [],
+    searchOpen: false,
+    searchFocusIdx: 0,
+    isPaused: false,
+    reconnectAttempts: 0,
+    editMode: false,
+    draggedWidget: null,
+    isFirstRender: true,
+    currentEnvFilter: 'all',
+    domainModalDomain: null,
+};
 
-function t(key) { return I18N[currentLang][key] || I18N['en'][key] || key; }
+function t(key) { return I18N[state.lang][key] || I18N['en'][key] || key; }
 
 function applyI18n() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        el.textContent = t(key);
+    document.querySelectorAll('[data-i18n]').forEach(node => {
+        const key = node.getAttribute('data-i18n');
+        node.textContent = t(key);
     });
 }
 
@@ -222,8 +275,6 @@ function barClass(pct, w = 70, c = 90) {
 }
 
 // --- Stable Rendering (no layout shift) ---
-let isFirstRender = true;
-
 function setText(el, text) {
     if (el && el.textContent !== text) el.textContent = text;
 }
@@ -440,7 +491,7 @@ function buildHostHero(h, gpu) {
         : '';
 
     return `
-    <div class="host-hero" data-host="${h.name}">
+    <div class="host-hero" data-host="${escapeHtml(h.name)}">
         <div class="hero-header">
             <div class="hero-title-row">
                 <svg class="hero-server-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -450,12 +501,12 @@ function buildHostHero(h, gpu) {
                     <path d="M6 18v2M12 18v2M18 18v2"/>
                 </svg>
                 <div>
-                    <h2 class="hero-name">${h.name}</h2>
-                    <span class="hero-subtitle">Proxmox VE · ${h.host} · ${t('uptime_prefix')} ${h.uptime}</span>
+                    <h2 class="hero-name">${escapeHtml(h.name)}</h2>
+                    <span class="hero-subtitle">Proxmox VE · ${escapeHtml(h.host)} · ${t('uptime_prefix')} ${escapeHtml(h.uptime)}</span>
                 </div>
                 <span class="badge ${h.status} hero-badge">${t(h.status)}</span>
             </div>
-            <div class="hero-load">${t('load_prefix')} ${h.load}</div>
+            <div class="hero-load">${t('load_prefix')} ${escapeHtml(h.load)}</div>
         </div>
 
         <div class="hero-grid">
@@ -513,9 +564,9 @@ function buildHostHero(h, gpu) {
             ${fans.length > 0 ? `<div class="hero-fans">${fans.map(f =>
                 `<span class="hero-fan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12c-1.5-3-4-5-7-4 1-3 4-5 7-4 -3-1.5-5-4-4-7 3 1 5 4 4 7 1.5-3 4-5 7-4-1 3-4 5-7 4 3 1.5 5 4 4 7-3-1-5-4-4-7z"/><circle cx="12" cy="12" r="2"/></svg> ${f.name} <b>${f.rpm}</b> RPM</span>`
             ).join('')}</div>` : ''}
-            <button class="ssh-copy-btn" onclick="copySSH('${h.host}')">
+            <button class="ssh-copy-btn" data-ssh-host="${escapeHtml(h.host)}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                ssh root@${h.host}
+                ssh root@${escapeHtml(h.host)}
             </button>
         </div>
     </div>`;
@@ -542,16 +593,16 @@ function updateHostHero(el, h, gpu) {
 // --- Host Cards (with SSH copy) ---
 function buildHostCard(h, gpu) {
     return `
-        <div class="host-card ${h.status}" data-host="${h.name}">
+        <div class="host-card ${h.status}" data-host="${escapeHtml(h.name)}">
             <div class="host-header">
-                <span class="host-name">${h.name}</span>
+                <span class="host-name">${escapeHtml(h.name)}</span>
                 <span class="badge ${h.status}" data-host-badge>${t(h.status)}</span>
             </div>
             <div class="host-meta">
-                <span>${h.type}</span>
-                <span class="host-ip">${h.host}</span>
-                <span data-host-uptime>${h.uptime ? t('uptime_prefix') + ' ' + h.uptime : ''}</span>
-                <span data-host-load>${h.load ? t('load_prefix') + ' ' + h.load : ''}</span>
+                <span>${escapeHtml(h.type)}</span>
+                <span class="host-ip">${escapeHtml(h.host)}</span>
+                <span data-host-uptime>${h.uptime ? t('uptime_prefix') + ' ' + escapeHtml(h.uptime) : ''}</span>
+                <span data-host-load>${h.load ? t('load_prefix') + ' ' + escapeHtml(h.load) : ''}</span>
             </div>
             <div class="metric">
                 <div class="metric-header">
@@ -576,9 +627,9 @@ function buildHostCard(h, gpu) {
             </div>
             ${buildHostExtras(h, h.type === "proxmox" ? (window._dashGpu || null) : null)}
             ${h.online ? `<div class="host-footer">
-                <button class="ssh-copy-btn" onclick="copySSH('${h.host}')" title="Скопировать SSH команду">
+                <button class="ssh-copy-btn" data-ssh-host="${escapeHtml(h.host)}" title="Скопировать SSH команду">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    ssh dev@${h.host}
+                    ssh dev@${escapeHtml(h.host)}
                 </button>
             </div>` : ''}
         </div>`;
@@ -652,13 +703,13 @@ function buildProjectCard(p, compact) {
         : `<span class="project-icon">${getIcon(p.icon)}</span>`;
 
     return `
-        <div class="project-card ${p.status}" data-project="${p.name}" style="cursor:pointer" onclick="openProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+        <div class="project-card ${p.status}" data-project="${escapeHtml(p.name)}" style="cursor:pointer" onclick="openProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">
             <div class="project-header">
                 ${iconHtml}
-                <span class="project-name">${p.name}</span>
+                <span class="project-name">${escapeHtml(p.name)}</span>
                 <span class="project-status-badge badge ${p.status}" data-proj-badge>${t(p.status)}</span>
             </div>
-            ${!compact ? `<div class="project-desc">${p.description}</div>` : ''}
+            ${!compact ? `<div class="project-desc">${escapeHtml(p.description)}</div>` : ''}
             <div class="project-ram" data-proj-ram style="${p.memory_total ? '' : 'display:none'}">
                 <span class="ram-label">RAM</span>
                 <span class="ram-value" data-proj-ram-val>${formatBytes(p.memory_total || 0)}</span>
@@ -669,32 +720,32 @@ function buildProjectCard(p, compact) {
                     <div class="endpoint">
                         <span class="endpoint-dot up" data-proj-local-api-dot></span>
                         <span class="endpoint-label">API</span>
-                        <span class="endpoint-url">${p.local_api.replace('http://','').replace('https://','')}</span>
+                        <span class="endpoint-url">${escapeHtml(p.local_api.replace('http://','').replace('https://',''))}</span>
                     </div>` : ''}
                 ${p.local_web ? `
                     <div class="endpoint">
                         <span class="endpoint-dot up" data-proj-local-web-dot></span>
                         <span class="endpoint-label">WEB</span>
-                        <span class="endpoint-url">${p.local_web.replace('http://','').replace('https://','')}</span>
+                        <span class="endpoint-url">${escapeHtml(p.local_web.replace('http://','').replace('https://',''))}</span>
                     </div>` : ''}
                 ${p.web_url || p.api_url ? `<div class="env-label">PROD (VM200)</div>` : ''}
                 ${p.api_url ? `
                     <div class="endpoint">
                         <span class="endpoint-dot ${p.api_up ? 'up' : 'down'}" data-proj-api-dot></span>
                         <span class="endpoint-label">API</span>
-                        <a href="${p.api_url}" target="_blank">${p.api_url.replace('https://','')}</a>
-                        <span class="endpoint-status" data-proj-api-code>${p.api_status || ''}</span>
+                        <a href="${escapeHtml(p.api_url)}" target="_blank">${escapeHtml(p.api_url.replace('https://',''))}</a>
+                        <span class="endpoint-status" data-proj-api-code>${escapeHtml(p.api_status || '')}</span>
                     </div>` : ''}
                 ${p.web_url ? `
                     <div class="endpoint">
                         <span class="endpoint-dot ${p.web_up ? 'up' : 'down'}" data-proj-web-dot></span>
                         <span class="endpoint-label">WEB</span>
-                        <a href="${p.web_url}" target="_blank">${p.web_url.replace('https://','')}</a>
-                        <span class="endpoint-status" data-proj-web-code>${p.web_status || ''}</span>
+                        <a href="${escapeHtml(p.web_url)}" target="_blank">${escapeHtml(p.web_url.replace('https://',''))}</a>
+                        <span class="endpoint-status" data-proj-web-code>${escapeHtml(p.web_status || '')}</span>
                     </div>` : ''}
             </div>
             ${!compact && p.services && p.services.length ? `<div class="project-services" data-proj-svcs>
-                ${p.services.map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${s.name}">${s.name}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
+                ${p.services.map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${escapeHtml(s.name)}">${escapeHtml(s.name)}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
             </div>` : ''}
         </div>`;
 }
@@ -747,9 +798,8 @@ function renderProjects(projects, targetId, compact) {
 }
 
 // --- Projects env filter ---
-let _currentEnvFilter = 'all';
 function filterProjectsByEnv(env) {
-    _currentEnvFilter = env;
+    state.currentEnvFilter = env;
     document.querySelectorAll('.env-toggle-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.env === env);
     });
@@ -789,12 +839,12 @@ function renderInfra(infra, targetId) {
             let dot = i.active ? 'active' : 'inactive';
             if (i.optional && !i.active) dot = 'optional';
             return `
-                <div class="infra-item" data-infra="${i.name}">
+                <div class="infra-item" data-infra="${escapeHtml(i.name)}">
                     <span class="infra-dot ${dot}" data-infra-dot></span>
-                    <span class="infra-name">${i.name}</span>
-                    ${i.port ? `<span class="infra-port">:${i.port}</span>` : ''}
+                    <span class="infra-name">${escapeHtml(i.name)}</span>
+                    ${i.port ? `<span class="infra-port">:${escapeHtml(i.port)}</span>` : ''}
                     <span class="infra-mem" data-infra-mem>${i.memory ? formatBytes(i.memory) : ''}</span>
-                    <span class="infra-state" data-infra-state>${i.state || ''}</span>
+                    <span class="infra-state" data-infra-state>${escapeHtml(i.state || '')}</span>
                 </div>`;
         }).join('');
     } else {
@@ -819,9 +869,9 @@ function renderKuma(monitors, targetId) {
         el.innerHTML = monitors.map(m => {
             const statusCls = m.up ? 'up' : (m.status === 2 ? 'pending' : 'down');
             return `
-                <div class="kuma-item" data-kuma="${m.id}">
+                <div class="kuma-item" data-kuma="${escapeHtml(m.id)}">
                     <span class="kuma-dot ${statusCls}" data-kuma-dot></span>
-                    <span class="kuma-name">${m.name}</span>
+                    <span class="kuma-name">${escapeHtml(m.name)}</span>
                     <span class="kuma-ping" data-kuma-ping>${m.ping ? m.ping + 'ms' : ''}</span>
                     <span class="kuma-uptime" data-kuma-uptime>${m.uptime > 0 ? m.uptime.toFixed(1) + '%' : ''}</span>
                 </div>`;
@@ -857,10 +907,8 @@ const INFRA_DOMAINS = new Set([
 
 
 // --- Domain Modal ---
-let _domainModalDomain = null;
-
 function openDomainModal(d) {
-    _domainModalDomain = d;
+    state.domainModalDomain = d;
     const modal = document.getElementById('domainModal');
     if (!modal) return;
 
@@ -868,56 +916,119 @@ function openDomainModal(d) {
     document.getElementById('domainModalName').textContent = d.name;
 
     const href = d.url || 'https://' + d.fqdn;
-    let body = '';
+    const bodyEl = document.getElementById('domainModalBody');
+    bodyEl.innerHTML = '';
 
-    body += '<div class="domain-modal-row">' +
-        '<span class="domain-modal-label">URL</span>' +
-        '<span class="domain-modal-val"><a href="' + href + '" target="_blank">' + d.fqdn + '</a></span>' +
-        '</div>';
+    const copySvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
 
+    // URL row
+    const urlRow = document.createElement('div');
+    urlRow.className = 'domain-modal-row';
+    urlRow.innerHTML = '<span class="domain-modal-label">URL</span>';
+    const urlVal = document.createElement('span');
+    urlVal.className = 'domain-modal-val';
+    const urlLink = document.createElement('a');
+    urlLink.href = href;
+    urlLink.target = '_blank';
+    urlLink.textContent = d.fqdn;
+    urlVal.appendChild(urlLink);
+    urlRow.appendChild(urlVal);
+    bodyEl.appendChild(urlRow);
+
+    // Description row
     if (d.description) {
-        body += '<div class="domain-modal-row">' +
-            '<span class="domain-modal-label">Описание</span>' +
-            '<span class="domain-modal-val">' + d.description + '</span>' +
-            '</div>';
+        const descRow = document.createElement('div');
+        descRow.className = 'domain-modal-row';
+        descRow.innerHTML = '<span class="domain-modal-label">Описание</span>';
+        const descVal = document.createElement('span');
+        descVal.className = 'domain-modal-val';
+        descVal.textContent = d.description;
+        descRow.appendChild(descVal);
+        bodyEl.appendChild(descRow);
     }
 
+    // LAN type row
     if (d.local) {
-        body += '<div class="domain-modal-row">' +
-            '<span class="domain-modal-label">Тип</span>' +
-            '<span class="domain-modal-val">🏠 LAN (локальный)</span>' +
-            '</div>';
+        const lanRow = document.createElement('div');
+        lanRow.className = 'domain-modal-row';
+        lanRow.innerHTML = '<span class="domain-modal-label">Тип</span><span class="domain-modal-val">🏠 LAN (локальный)</span>';
+        bodyEl.appendChild(lanRow);
     }
 
+    // Login row — use data-copy attribute, wired via addEventListener
     if (d.login) {
-        body += '<div class="domain-modal-row">' +
-            '<span class="domain-modal-label">Логин</span>' +
-            '<div class="domain-cred-row" style="flex:1">' +
-            '<span class="domain-cred-val">' + d.login + '</span>' +
-            '<button class="domain-cred-copy" onclick="navigator.clipboard.writeText(\'' + d.login + '\').then(()=>showCopyToast(\'' + d.login + '\'))" title="Копировать">' +
-            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
-            '</button></div></div>';
+        const loginRow = document.createElement('div');
+        loginRow.className = 'domain-modal-row';
+        loginRow.innerHTML = '<span class="domain-modal-label">Логин</span>';
+        const credRow = document.createElement('div');
+        credRow.className = 'domain-cred-row';
+        credRow.style.flex = '1';
+        const loginVal = document.createElement('span');
+        loginVal.className = 'domain-cred-val';
+        loginVal.textContent = d.login;
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'domain-cred-copy';
+        copyBtn.title = 'Копировать';
+        copyBtn.innerHTML = copySvg;
+        copyBtn.dataset.copy = d.login;
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(d.login).then(() => showCopyToast(d.login));
+        });
+        credRow.appendChild(loginVal);
+        credRow.appendChild(copyBtn);
+        loginRow.appendChild(credRow);
+        bodyEl.appendChild(loginRow);
     }
 
+    // Password row — store password in dataset, no inline onclick
     if (d.password) {
-        body += '<div class="domain-modal-row">' +
-            '<span class="domain-modal-label">Пароль</span>' +
-            '<div class="domain-cred-row" style="flex:1">' +
-            '<span class="domain-cred-val" id="modalPwdVal" data-show="false">••••••••</span>' +
-            '<button class="domain-cred-toggle" onclick="toggleModalPwd(\'' + d.password + '\')" title="Показать/скрыть">👁</button>' +
-            '<button class="domain-cred-copy" onclick="navigator.clipboard.writeText(\'' + d.password + '\').then(()=>showCopyToast(\'copied\'))" title="Копировать">' +
-            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
-            '</button></div></div>';
+        const pwdRow = document.createElement('div');
+        pwdRow.className = 'domain-modal-row';
+        pwdRow.innerHTML = '<span class="domain-modal-label">Пароль</span>';
+        const credRow = document.createElement('div');
+        credRow.className = 'domain-cred-row';
+        credRow.style.flex = '1';
+        const pwdVal = document.createElement('span');
+        pwdVal.className = 'domain-cred-val';
+        pwdVal.id = 'modalPwdVal';
+        pwdVal.dataset.show = 'false';
+        pwdVal.dataset.pwd = d.password;
+        pwdVal.textContent = '••••••••';
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'domain-cred-toggle';
+        toggleBtn.title = 'Показать/скрыть';
+        toggleBtn.textContent = '👁';
+        toggleBtn.addEventListener('click', () => {
+            const showing = pwdVal.dataset.show === 'true';
+            pwdVal.dataset.show = showing ? 'false' : 'true';
+            pwdVal.textContent = showing ? '••••••••' : pwdVal.dataset.pwd;
+        });
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'domain-cred-copy';
+        copyBtn.title = 'Копировать';
+        copyBtn.innerHTML = copySvg;
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(d.password).then(() => showCopyToast('copied'));
+        });
+        credRow.appendChild(pwdVal);
+        credRow.appendChild(toggleBtn);
+        credRow.appendChild(copyBtn);
+        pwdRow.appendChild(credRow);
+        bodyEl.appendChild(pwdRow);
     }
 
     if (!d.login && !d.password) {
-        body += '<div class="domain-modal-row">' +
-            '<span class="domain-modal-label"></span>' +
-            '<span class="domain-modal-val" style="color:var(--text-muted);font-style:italic">Без авторизации</span>' +
-            '</div>';
+        const noAuthRow = document.createElement('div');
+        noAuthRow.className = 'domain-modal-row';
+        noAuthRow.innerHTML = '<span class="domain-modal-label"></span>';
+        const noAuthVal = document.createElement('span');
+        noAuthVal.className = 'domain-modal-val';
+        noAuthVal.style.cssText = 'color:var(--text-muted);font-style:italic';
+        noAuthVal.textContent = 'Без авторизации';
+        noAuthRow.appendChild(noAuthVal);
+        bodyEl.appendChild(noAuthRow);
     }
 
-    document.getElementById('domainModalBody').innerHTML = body;
     modal.classList.remove('hidden');
 }
 
@@ -943,8 +1054,8 @@ function initDomainModal() {
 // --- Keys Button (navbar) - opens domains overview modal ---
 function initKeysBtn() {
     document.getElementById('keysBtn')?.addEventListener('click', () => {
-        if (!lastData || !lastData.domains) return;
-        const hasCredentials = lastData.domains.filter(d => d.login || d.password);
+        if (!state.data || !state.data.domains) return;
+        const hasCredentials = state.data.domains.filter(d => d.login || d.password);
         if (hasCredentials.length > 0) {
             openDomainModal(hasCredentials[0]);
         } else {
@@ -1026,9 +1137,9 @@ function renderDomains(domains, targetId, full) {
 
                 html += '<div class="domain-row-item" onclick="openDomainModal(' + JSON.stringify(d).replace(/"/g, '&quot;') + ')">' +
                     iconHtml +
-                    '<span class="domain-row-name">' + d.name + '</span>' +
-                    '<span class="domain-row-fqdn">' + d.fqdn + '</span>' +
-                    '<span class="domain-row-desc">' + (d.description || '') + '</span>' +
+                    '<span class="domain-row-name">' + escapeHtml(d.name) + '</span>' +
+                    '<span class="domain-row-fqdn">' + escapeHtml(d.fqdn) + '</span>' +
+                    '<span class="domain-row-desc">' + escapeHtml(d.description || '') + '</span>' +
                     '<div class="domain-row-badges">' +
                     (d.local ? '<span class="domain-lan-badge">LAN</span>' : '') +
                     (hasKey ? '<span class="domain-key-icon">🔑</span>' : '') +
@@ -1044,17 +1155,17 @@ function renderDomains(domains, targetId, full) {
 
     } else {
         // Overview widget: compact tags
-        el.innerHTML = domains.filter(d => !d.local).slice(0, 20).map(d => '<a class="domain-tag ' + (d.reachable === false ? 'unreachable' : '') + '" href="' + (d.url || 'https://' + d.fqdn) + '" target="_blank" title="' + (d.description || d.fqdn) + '">' +
+        el.innerHTML = domains.filter(d => !d.local).slice(0, 20).map(d => '<a class="domain-tag ' + (d.reachable === false ? 'unreachable' : '') + '" href="' + escapeHtml(d.url || 'https://' + d.fqdn) + '" target="_blank" title="' + escapeHtml(d.description || d.fqdn) + '">' +
             '<span class="endpoint-dot ' + (d.reachable !== false ? 'up' : 'down') + '" style="flex-shrink:0;margin-right:2px"></span>' +
-            d.name + '</a>').join('');
+            escapeHtml(d.name) + '</a>').join('');
     }
 }
 
 function initDomainsFilter() {
     const q = document.getElementById('domainsFilter');
     const s = document.getElementById('domainsTypeFilter');
-    if (q) q.addEventListener('input', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
-    if (s) s.addEventListener('change', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
+    if (q) q.addEventListener('input', () => { if (state.data) renderDomains(state.data.domains, 'domainsGridFull', true); });
+    if (s) s.addEventListener('change', () => { if (state.data) renderDomains(state.data.domains, 'domainsGridFull', true); });
 }
 
 // --- Services Table ---
@@ -1106,10 +1217,10 @@ function renderServicesTable(data, targetId) {
             <tbody>
                 ${filtered.length ? filtered.map(r => `
                     <tr>
-                        <td>${r.service}</td>
-                        <td>${r.host}</td>
-                        <td>${r.level || '-'}</td>
-                        <td>${r.port || '-'}</td>
+                        <td>${escapeHtml(r.service)}</td>
+                        <td>${escapeHtml(r.host)}</td>
+                        <td>${escapeHtml(r.level || '-')}</td>
+                        <td>${escapeHtml(r.port || '-')}</td>
                         <td class="mono">${r.memory ? formatBytes(r.memory) : '-'}</td>
                         <td><span class="badge ${r.active ? 'ok' : 'crit'}">${r.active ? t('active') : t('inactive')}</span></td>
                     </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Нет сервисов</td></tr>`}
@@ -1121,8 +1232,8 @@ function renderServicesTable(data, targetId) {
 function initServicesFilter() {
     const q = document.getElementById('servicesFilter');
     const s = document.getElementById('servicesStateFilter');
-    if (q) q.addEventListener('input', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
-    if (s) s.addEventListener('change', () => { if (lastData) renderServicesTable(lastData, 'servicesTable'); });
+    if (q) q.addEventListener('input', () => { if (state.data) renderServicesTable(state.data, 'servicesTable'); });
+    if (s) s.addEventListener('change', () => { if (state.data) renderServicesTable(state.data, 'servicesTable'); });
 }
 
 // --- Status Banner (removed from UI, kept as no-op) ---
@@ -1209,44 +1320,44 @@ function openProjectModal(p) {
     titleEl.innerHTML =
         (logo ? '<span style="width:28px;height:28px;display:flex;flex-shrink:0">' + logo + '</span>'
                : '<span style="font-size:20px">' + getIcon(p.icon) + '</span>') +
-        '<span>' + p.name + '</span>' +
+        '<span>' + escapeHtml(p.name) + '</span>' +
         '<span class="badge ' + p.status + '" style="font-size:11px">' + t(p.status) + '</span>';
 
     let body = '';
 
     if (p.purpose || p.description) {
         body += '<div style="background:var(--bg-secondary);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.5">' +
-            (p.purpose || p.description) + '</div>';
+            escapeHtml(p.purpose || p.description) + '</div>';
     }
 
     // Production URLs
     body += '<div style="margin-bottom:14px"><div class="proj-section-title">Продакшн</div>';
-    if (p.web_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.web_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + p.web_url + '" target="_blank">' + p.web_url + '</a>' + (p.web_status ? ' <span style="color:var(--text-muted);font-size:11px">' + p.web_status + '</span>' : '') + '</span></div>';
-    if (p.api_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.api_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + p.api_url + '" target="_blank">' + p.api_url + '</a>' + (p.api_status ? ' <span style="color:var(--text-muted);font-size:11px">' + p.api_status + '</span>' : '') + '</span></div>';
+    if (p.web_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.web_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + escapeHtml(p.web_url) + '" target="_blank">' + escapeHtml(p.web_url) + '</a>' + (p.web_status ? ' <span style="color:var(--text-muted);font-size:11px">' + escapeHtml(p.web_status) + '</span>' : '') + '</span></div>';
+    if (p.api_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.api_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + escapeHtml(p.api_url) + '" target="_blank">' + escapeHtml(p.api_url) + '</a>' + (p.api_status ? ' <span style="color:var(--text-muted);font-size:11px">' + escapeHtml(p.api_status) + '</span>' : '') + '</span></div>';
     body += '</div>';
 
     // Local URLs
     if (p.local_web || p.local_api) {
         body += '<div style="margin-bottom:14px"><div class="proj-section-title">🏠 Локальные (LAN)</div>';
-        if (p.local_web) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><a href="' + p.local_web + '" target="_blank">' + p.local_web + '</a></span></div>';
-        if (p.local_api) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><a href="' + p.local_api + '" target="_blank">' + p.local_api + '</a></span></div>';
+        if (p.local_web) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><a href="' + escapeHtml(p.local_web) + '" target="_blank">' + escapeHtml(p.local_web) + '</a></span></div>';
+        if (p.local_api) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><a href="' + escapeHtml(p.local_api) + '" target="_blank">' + escapeHtml(p.local_api) + '</a></span></div>';
         body += '</div>';
     }
 
-    // Accounts table
+    // Accounts table — safe: use escapeHtml for all user data, data-* for sensitive values
     if (p.accounts && p.accounts.length) {
         body += '<div style="margin-bottom:14px"><div class="proj-section-title">\u{1F511} \u{423}\u{447}\u{451}\u{442}\u{43D}\u{44B}\u{435} \u{437}\u{430}\u{43F}\u{438}\u{441}\u{438}</div>';
         body += '<table class="accounts-table"><thead><tr><th>Email</th><th>\u{420}\u{43E}\u{43B}\u{44C}</th><th>\u{41F}\u{430}\u{440}\u{43E}\u{43B}\u{44C}</th><th>\u{417}\u{430}\u{43C}\u{435}\u{442}\u{43A}\u{430}</th><th></th></tr></thead><tbody>';
         p.accounts.forEach((a, idx) => {
             const pwdId = 'apwd_' + idx + '_' + p.name.replace(/[^a-z0-9]/gi, '');
             body += '<tr>' +
-                '<td class="mono" style="font-size:11px">' + a.email + '</td>' +
-                '<td><span class="role-badge">' + (a.role || '-') + '</span></td>' +
-                '<td><span id="' + pwdId + '" data-pwd="' + (a.password||'') + '" data-show="false" style="font-family:var(--font-mono);font-size:11px">' + (a.password ? '\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}' : '\u{2014}') + '</span></td>' +
-                '<td style="font-size:11px;color:var(--text-muted)">' + (a.note || '') + '</td>' +
+                '<td class="mono" style="font-size:11px">' + escapeHtml(a.email) + '</td>' +
+                '<td><span class="role-badge">' + escapeHtml(a.role || '-') + '</span></td>' +
+                '<td><span id="' + escapeHtml(pwdId) + '" data-pwd="' + escapeHtml(a.password||'') + '" data-show="false" style="font-family:var(--font-mono);font-size:11px">' + (a.password ? '\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}' : '\u{2014}') + '</span></td>' +
+                '<td style="font-size:11px;color:var(--text-muted)">' + escapeHtml(a.note || '') + '</td>' +
                 '<td style="white-space:nowrap">' +
-                (a.password ? '<button class="domain-cred-toggle" data-pwd-target="' + pwdId + '" title="\u{41F}\u{43E}\u{43A}\u{430}\u{437}\u{430}\u{442}\u{44C}" style="margin-right:3px">\u{1F441}</button>' : '') +
-                '<button class="domain-cred-copy" data-copy="' + (a.email||'') + '" title="Copy email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>' +
+                (a.password ? '<button class="domain-cred-toggle" data-pwd-target="' + escapeHtml(pwdId) + '" title="\u{41F}\u{43E}\u{43A}\u{430}\u{437}\u{430}\u{442}\u{44C}" style="margin-right:3px">\u{1F441}</button>' : '') +
+                '<button class="domain-cred-copy" data-copy="' + escapeHtml(a.email||'') + '" title="Copy email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>' +
                 '</td></tr>';
         });
         body += '</tbody></table></div>';
@@ -1257,7 +1368,7 @@ function openProjectModal(p) {
         body += '<div><div class="proj-section-title">Сервисы</div>';
         body += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
         p.services.forEach(s => {
-            body += '<span class="svc-tag ' + (s.active ? 'active' : 'inactive') + '">' + s.name + (s.memory ? ' · ' + formatBytes(s.memory) : '') + '</span>';
+            body += '<span class="svc-tag ' + (s.active ? 'active' : 'inactive') + '">' + escapeHtml(s.name) + (s.memory ? ' · ' + formatBytes(s.memory) : '') + '</span>';
         });
         body += '</div>';
         if (p.memory_total) body += '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Всего RAM: ' + formatBytes(p.memory_total) + '</div>';
@@ -1327,7 +1438,7 @@ function render(data) {
     updateBanner(data);
 
     const dt = new Date(data.updated_at);
-    document.getElementById('updatedAt').textContent = dt.toLocaleTimeString(currentLang === 'ru' ? 'ru-RU' : 'en-US');
+    document.getElementById('updatedAt').textContent = dt.toLocaleTimeString(state.lang === 'ru' ? 'ru-RU' : 'en-US');
 
     document.getElementById('pulse').className = 'pulse-dot live';
     document.getElementById('connectionText').textContent = t('connected');
@@ -1391,18 +1502,14 @@ function showCopyToast(text) {
     if (!toast) return;
     toast.textContent = `${t('copied')}: ${text}`;
     toast.classList.add('visible');
-    setTimeout(() => toast.classList.remove('visible'), 2500);
+    setTimeout(() => toast.classList.remove('visible'), COPY_TOAST_DURATION_MS);
 }
 
 // --- Global Search ---
-let searchIndex = [];
-let searchOpen = false;
-let searchFocusIdx = 0;
-
 function buildSearchIndex(data) {
-    searchIndex = [];
+    state.searchIndex = [];
     (data.projects || []).forEach(p => {
-        searchIndex.push({
+        state.searchIndex.push({
             type: 'project',
             logo: getProjectLogo(p.name),
             icon: getIcon(p.icon),
@@ -1415,7 +1522,7 @@ function buildSearchIndex(data) {
         });
     });
     (data.domains || []).forEach(d => {
-        searchIndex.push({
+        state.searchIndex.push({
             type: 'domain',
             logo: null,
             icon: DOMAIN_EMOJI[d.name] || '🌐',
@@ -1428,7 +1535,7 @@ function buildSearchIndex(data) {
         });
     });
     (data.hosts || []).forEach(h => {
-        searchIndex.push({
+        state.searchIndex.push({
             type: 'host',
             logo: null,
             icon: '🖥️',
@@ -1441,7 +1548,7 @@ function buildSearchIndex(data) {
         });
     });
     (data.infrastructure || []).forEach(i => {
-        searchIndex.push({
+        state.searchIndex.push({
             type: 'service',
             logo: null,
             icon: '⚙️',
@@ -1458,7 +1565,7 @@ function buildSearchIndex(data) {
 function doSearch(q) {
     const resultsEl = document.getElementById('searchResults');
     if (!resultsEl) return;
-    searchFocusIdx = 0;
+    state.searchFocusIdx = 0;
 
     if (!q.trim()) {
         resultsEl.innerHTML = `<div class="search-hint">${t('search_hint')}</div>`;
@@ -1466,7 +1573,7 @@ function doSearch(q) {
     }
 
     const ql = q.toLowerCase();
-    const matches = searchIndex.filter(item =>
+    const matches = state.searchIndex.filter(item =>
         item.name.toLowerCase().includes(ql) ||
         (item.desc || '').toLowerCase().includes(ql) ||
         (item.sub || '').toLowerCase().includes(ql)
@@ -1482,41 +1589,43 @@ function doSearch(q) {
             ? `<span class="si-logo">${item.logo}</span>`
             : `<span class="si-emoji">${item.icon}</span>`;
         return `
-        <div class="search-item ${i === 0 ? 'focused' : ''}" data-idx="${i}" data-tab="${item.tab}" data-url="${item.url || ''}">
+        <div class="search-item ${i === 0 ? 'focused' : ''}" data-idx="${i}" data-tab="${escapeHtml(item.tab)}" data-url="${escapeHtml(item.url || '')}">
             ${iconHtml}
             <div class="si-info">
                 <div class="si-name">${highlightMatch(item.name, ql)}</div>
-                ${item.desc ? `<div class="si-desc">${item.desc}</div>` : ''}
+                ${item.desc ? `<div class="si-desc">${escapeHtml(item.desc)}</div>` : ''}
             </div>
             <div class="si-right">
-                <span class="si-type-badge">${item.type}</span>
-                ${item.sub ? `<span class="si-sub">${item.sub}</span>` : ''}
+                <span class="si-type-badge">${escapeHtml(item.type)}</span>
+                ${item.sub ? `<span class="si-sub">${escapeHtml(item.sub)}</span>` : ''}
             </div>
         </div>`;
     }).join('');
 
-    resultsEl.querySelectorAll('.search-item').forEach(el => {
-        el.addEventListener('click', () => activateSearchItem(el));
-        el.addEventListener('mouseenter', () => {
+    resultsEl.querySelectorAll('.search-item').forEach(item => {
+        item.addEventListener('click', () => activateSearchItem(item));
+        item.addEventListener('mouseenter', () => {
             resultsEl.querySelectorAll('.search-item').forEach(x => x.classList.remove('focused'));
-            el.classList.add('focused');
-            searchFocusIdx = parseInt(el.dataset.idx);
+            item.classList.add('focused');
+            state.searchFocusIdx = parseInt(item.dataset.idx);
         });
     });
 }
 
 function highlightMatch(text, q) {
-    if (!q) return text;
+    if (!q) return escapeHtml(text);
     const idx = text.toLowerCase().indexOf(q);
-    if (idx < 0) return text;
-    return text.slice(0, idx) + `<mark>${text.slice(idx, idx + q.length)}</mark>` + text.slice(idx + q.length);
+    if (idx < 0) return escapeHtml(text);
+    return escapeHtml(text.slice(0, idx)) +
+        '<mark>' + escapeHtml(text.slice(idx, idx + q.length)) + '</mark>' +
+        escapeHtml(text.slice(idx + q.length));
 }
 
-function activateSearchItem(el) {
-    if (el.dataset.url) {
-        window.open(el.dataset.url, '_blank');
-    } else if (el.dataset.tab) {
-        switchTab(el.dataset.tab);
+function activateSearchItem(node) {
+    if (node.dataset.url) {
+        window.open(node.dataset.url, '_blank');
+    } else if (node.dataset.tab) {
+        switchTab(node.dataset.tab);
     }
     closeSearch();
 }
@@ -1524,15 +1633,15 @@ function activateSearchItem(el) {
 function navigateSearch(dir) {
     const items = document.querySelectorAll('#searchResults .search-item');
     if (!items.length) return;
-    items[searchFocusIdx]?.classList.remove('focused');
-    searchFocusIdx = (searchFocusIdx + dir + items.length) % items.length;
-    const focused = items[searchFocusIdx];
+    items[state.searchFocusIdx]?.classList.remove('focused');
+    state.searchFocusIdx = (state.searchFocusIdx + dir + items.length) % items.length;
+    const focused = items[state.searchFocusIdx];
     focused?.classList.add('focused');
     focused?.scrollIntoView({ block: 'nearest' });
 }
 
 function openSearch() {
-    searchOpen = true;
+    state.searchOpen = true;
     document.getElementById('searchOverlay').classList.add('visible');
     document.body.style.overflow = 'hidden';
     setTimeout(() => {
@@ -1543,7 +1652,7 @@ function openSearch() {
 }
 
 function closeSearch() {
-    searchOpen = false;
+    state.searchOpen = false;
     document.getElementById('searchOverlay').classList.remove('visible');
     document.body.style.overflow = '';
 }
@@ -1574,11 +1683,11 @@ function initSearch() {
         // Cmd/Ctrl+K → toggle search
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
             e.preventDefault();
-            searchOpen ? closeSearch() : openSearch();
+            state.searchOpen ? closeSearch() : openSearch();
             return;
         }
         // Escape → close search if open
-        if (e.key === 'Escape' && searchOpen) {
+        if (e.key === 'Escape' && state.searchOpen) {
             e.preventDefault();
             closeSearch();
             return;
@@ -1586,7 +1695,7 @@ function initSearch() {
         // 1-5 tab shortcuts when not typing in input
         const active = document.activeElement;
         const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
-        if (!typing && !searchOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (!typing && !state.searchOpen && !e.metaKey && !e.ctrlKey && !e.altKey) {
             const tabKeys = { '1': 'overview', '2': 'hosts', '3': 'projects', '4': 'services', '5': 'domains' };
             if (tabKeys[e.key]) {
                 e.preventDefault();
@@ -1608,68 +1717,64 @@ function initTheme() {
 // --- Language Toggle ---
 function initLang() {
     document.querySelectorAll('#langToggle .toggle-btn').forEach(btn => {
-        if (btn.dataset.lang === currentLang) btn.classList.add('active');
+        if (btn.dataset.lang === state.lang) btn.classList.add('active');
         else btn.classList.remove('active');
 
         btn.addEventListener('click', () => {
-            currentLang = btn.dataset.lang;
-            localStorage.setItem('lang', currentLang);
+            state.lang = btn.dataset.lang;
+            localStorage.setItem('lang', state.lang);
             document.querySelectorAll('#langToggle .toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             applyI18n();
-            if (lastData) render(lastData);
+            if (state.data) render(state.data);
         });
     });
 }
 
 // --- Visibility (pause when hidden) ---
-let isPaused = false;
-
 function initVisibility() {
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-            isPaused = true;
+            state.isPaused = true;
             document.getElementById('pauseOverlay').classList.add('visible');
         } else {
-            isPaused = false;
+            state.isPaused = false;
             document.getElementById('pauseOverlay').classList.remove('visible');
         }
     });
 }
 
 // --- SSE ---
-let lastData = null;
-let reconnectAttempts = 0;
-
 function connect() {
     const evtSource = new EventSource('/sse');
 
     evtSource.onopen = () => {
-        reconnectAttempts = 0;
+        state.reconnectAttempts = 0;
         document.getElementById('errorOverlay').classList.remove('visible');
     };
 
     evtSource.onmessage = (event) => {
-        if (isPaused) return;
+        if (state.isPaused) return;
         try {
             const data = JSON.parse(event.data);
-            lastData = data;
+            state.data = data;
             render(data);
         } catch (e) {
             console.error('Parse error:', e);
         }
     };
 
-    evtSource.onerror = () => {
+    evtSource.onerror = (e) => {
+        console.warn('SSE connection lost, reconnecting...', e);
         evtSource.close();
         document.getElementById('pulse').className = 'pulse-dot error';
         document.getElementById('connectionText').textContent = t('reconnecting');
         document.getElementById('loadingOverlay').classList.remove('visible');
 
-        reconnectAttempts++;
-        const delay = Math.min(3000 * reconnectAttempts, 30000);
+        state.reconnectAttempts++;
+        const delay = Math.min(SSE_RECONNECT_BASE_DELAY_MS * state.reconnectAttempts, SSE_RECONNECT_MAX_DELAY_MS);
 
-        if (reconnectAttempts > 2) {
+        if (state.reconnectAttempts > SSE_ERROR_OVERLAY_THRESHOLD) {
             document.getElementById('errorOverlay').classList.add('visible');
         }
 
@@ -1678,9 +1783,6 @@ function connect() {
 }
 
 // --- Widget Drag & Drop ---
-let editMode = false;
-let draggedWidget = null;
-
 function initWidgets() {
     const grid = document.getElementById('widgetGrid');
     if (!grid) return;
@@ -1689,10 +1791,10 @@ function initWidgets() {
 
     const editBtn = document.getElementById('editToggle');
     editBtn.addEventListener('click', () => {
-        editMode = !editMode;
-        document.body.classList.toggle('edit-mode', editMode);
-        editBtn.classList.toggle('active', editMode);
-        grid.querySelectorAll('.widget').forEach(w => { w.draggable = editMode; });
+        state.editMode = !state.editMode;
+        document.body.classList.toggle('edit-mode', state.editMode);
+        editBtn.classList.toggle('active', state.editMode);
+        grid.querySelectorAll('.widget').forEach(w => { w.draggable = state.editMode; });
     });
 
     grid.querySelectorAll('.widget-resize').forEach(btn => {
@@ -1705,38 +1807,38 @@ function initWidgets() {
     });
 
     grid.addEventListener('dragstart', (e) => {
-        if (!editMode) return;
-        draggedWidget = e.target.closest('.widget');
-        if (!draggedWidget) return;
-        draggedWidget.classList.add('dragging');
+        if (!state.editMode) return;
+        state.draggedWidget = e.target.closest('.widget');
+        if (!state.draggedWidget) return;
+        state.draggedWidget.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
     });
 
     grid.addEventListener('dragend', () => {
-        if (draggedWidget) { draggedWidget.classList.remove('dragging'); draggedWidget = null; }
+        if (state.draggedWidget) { state.draggedWidget.classList.remove('dragging'); state.draggedWidget = null; }
         grid.querySelectorAll('.widget').forEach(w => w.classList.remove('drag-over'));
     });
 
     grid.addEventListener('dragover', (e) => {
         e.preventDefault();
-        if (!editMode || !draggedWidget) return;
+        if (!state.editMode || !state.draggedWidget) return;
         const target = e.target.closest('.widget');
-        if (!target || target === draggedWidget) return;
+        if (!target || target === state.draggedWidget) return;
         grid.querySelectorAll('.widget').forEach(w => w.classList.remove('drag-over'));
         target.classList.add('drag-over');
     });
 
     grid.addEventListener('drop', (e) => {
         e.preventDefault();
-        if (!editMode || !draggedWidget) return;
+        if (!state.editMode || !state.draggedWidget) return;
         const target = e.target.closest('.widget');
-        if (!target || target === draggedWidget) return;
+        if (!target || target === state.draggedWidget) return;
         target.classList.remove('drag-over');
         const widgets = [...grid.querySelectorAll('.widget')];
-        const fromIdx = widgets.indexOf(draggedWidget);
+        const fromIdx = widgets.indexOf(state.draggedWidget);
         const toIdx = widgets.indexOf(target);
-        if (fromIdx < toIdx) target.after(draggedWidget);
-        else target.before(draggedWidget);
+        if (fromIdx < toIdx) target.after(state.draggedWidget);
+        else target.before(state.draggedWidget);
         saveLayout();
     });
 }
@@ -1766,6 +1868,14 @@ function restoreLayout() {
     }
 }
 
+// --- SSH Copy Buttons (event delegation, avoids inline onclick) ---
+function initSshCopyButtons() {
+    document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-ssh-host]');
+        if (btn) copySSH(btn.dataset.sshHost);
+    });
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -1782,6 +1892,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSearch();
     initReloadConfig();
     initChat();
+    initSshCopyButtons();
     applyI18n();
     connect();
 });

@@ -2,6 +2,8 @@ server:
   port: 3301
   refresh_interval: 10s
   env: dev
+  allowed_origins:
+    - "*"  # dev mode — restrict to specific origins in production
 
 ollama:
   enabled: true
