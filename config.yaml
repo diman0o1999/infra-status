@@ -70,8 +70,8 @@ projects:
       web: https://cargo.core-stack.ru
       api: https://cargo-api.core-stack.ru
     local_urls:
-      web: https://api.cargo.local
-      api: https://api.cargo.local
+      web: http://cargo.local:8080
+      api: http://api.cargo.local:3000
     accounts:
       - email: volkov@rosagro-trade.ru
         password: "Demo1234!"
@@ -101,8 +101,8 @@ projects:
       web: https://fabro.core-stack.ru
       api: https://fabro-api.core-stack.ru
     local_urls:
-      web: https://api.fabro.local
-      api: https://api.fabro.local
+      web: http://fabro.local:3031
+      api: http://api.fabro.local:3030
     accounts:
       - email: admin@fabro.local
         password: "password123"
@@ -124,6 +124,8 @@ projects:
       system:
         - fabro-api
         - fabro-sidekiq
+      user:
+        - fabro-web
     host: prox-dev
 
   - name: Puls
@@ -134,8 +136,8 @@ projects:
       web: https://puls.core-stack.ru
       api: https://puls-api.core-stack.ru
     local_urls:
-      web: https://api.puls.local
-      api: https://api.puls.local
+      web: http://puls.local:3051
+      api: http://api.puls.local:3050
     accounts:
       - email: admin@puls.local
         password: "password123"
@@ -158,8 +160,8 @@ projects:
       web: https://emedic.core-stack.ru
       api: https://emedic-api.core-stack.ru
     local_urls:
-      web: https://api.emedic.local
-      api: https://api.emedic.local
+      web: http://emedic.local:3002
+      api: http://api.emedic.local:3081
     accounts:
       - email: admin@emedic.app
         password: "admin123"
@@ -183,8 +185,8 @@ projects:
       web: https://skazki.core-stack.ru
       api: https://skazki-api.core-stack.ru
     local_urls:
-      web: https://api.skazki.local
-      api: https://api.skazki.local
+      web: http://skazki.local:3091
+      api: http://api.skazki.local:3090
     accounts:
       - email: admin@skazki.local
         password: "password123"
@@ -208,8 +210,8 @@ projects:
       web: https://kraeved.core-stack.ru
       api: https://kraeved-api.core-stack.ru
     local_urls:
-      web: https://kraeved.core-stack.ru
-      api: https://kraeved-api.core-stack.ru
+      web: http://kraeved.local:3131
+      api: http://api.kraeved.local:3130
     accounts:
       - email: admin@kraeved.local
         password: "password"
@@ -220,7 +222,8 @@ projects:
         role: user
         note: Демо-пользователь
     services:
-      user: []
+      user:
+        - kraeved-web
     host: prox-dev
 
   - name: Logist23
@@ -231,8 +234,8 @@ projects:
       web: https://logist23.core-stack.ru
       api: https://logist23-api.core-stack.ru
     local_urls:
-      web: https://logist23.local
-      api: https://logist23.local
+      web: http://logist23.local:3110
+      api: http://logist23.local:3110
     accounts:
       - email: admin@logist23.local
         password: "password"
@@ -258,8 +261,8 @@ projects:
       web: https://racia.core-stack.ru
       api: https://racia-api.core-stack.ru
     local_urls:
-      web: https://api.racia.local
-      api: https://api.racia.local
+      web: http://racia.local:3061
+      api: http://api.racia.local:3060
     accounts:
       - email: admin@racia.local
         password: "password123"
@@ -268,6 +271,8 @@ projects:
     services:
       system:
         - racia-api
+      user:
+        - racia-web
     host: prox-dev
 
 
@@ -280,8 +285,8 @@ projects:
       web: https://nocta.core-stack.ru
       api: https://nocta.core-stack.ru
     local_urls:
-      web: https://phantom.local
-      api: https://phantom.local
+      web: http://phantom.local:3140
+      api: http://phantom.local:3140
     accounts:
       - email: admin@nocta.local
         password: "password123"
