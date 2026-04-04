@@ -2618,6 +2618,100 @@ body.edit-mode .widget-actions {
     color: #f87171;
 }
 
+/* ═══════════════════════════════════════════
+   HERO SENSORS BLOCK — board, nvme, voltages
+   ═══════════════════════════════════════════ */
+.hero-sensors-block {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.hero-sensors-section {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 12px 14px;
+    min-width: 160px;
+    flex: 1 1 160px;
+}
+
+.hero-sensors-title {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.hero-sensors-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.hero-sensor-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.hero-sensor-name {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+/* Voltages grid — 2 columns */
+.hero-volt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 10px;
+}
+
+.hero-volt-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+}
+
+.hero-volt-value {
+    font-size: 0.74rem;
+    color: #a5b4fc;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Inline row for ACPI / network */
+.hero-sensors-inline .hero-sensors-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.hero-sensors-inline .hero-sensor-item {
+    gap: 5px;
+}
+
+/* Responsive: collapse on mobile */
+@media (max-width: 600px) {
+    .hero-sensors-block {
+        flex-direction: column;
+    }
+    .hero-sensors-section {
+        min-width: unset;
+    }
+    .hero-volt-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 /* Env toggle bar */
 .env-toggle-bar {
     display: flex;

@@ -365,6 +365,10 @@ function buildHostHero(h, gpu) {
     const cpuTemp = th.cpu_package || 0;
     const cores = th.cpu_cores || [];
     const fans = th.fans || [];
+    const board = th.board || [];
+    const nvme = th.nvme || [];
+    const voltages = th.voltages || [];
+    const network = th.network || [];
     const g = gpu && gpu.online ? gpu : null;
     const vramPct = g ? (g.vram_used_mb / g.vram_total_mb * 100).toFixed(0) : 0;
 
@@ -375,6 +379,65 @@ function buildHostHero(h, gpu) {
             `<span class="hero-core-dot ${tempClass(c)}" title="Core ${i}: ${c}°C"></span>`
         ).join('') + '</div>';
     }
+
+    // Board sensor rows
+    let boardHtml = '';
+    if (board.length > 0) {
+        boardHtml = `<div class="hero-sensors-section">
+            <div class="hero-sensors-title">Board Sensors</div>
+            <div class="hero-sensors-grid">
+                ${board.map(s => `<div class="hero-sensor-item">
+                    <span class="hero-sensor-name">${s.name}</span>
+                    <span class="badge ${tempClass(s.value)}">${s.value.toFixed(1)}°C</span>
+                </div>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // NVMe section
+    let nvmeHtml = '';
+    if (nvme.length > 0) {
+        nvmeHtml = `<div class="hero-sensors-section">
+            <div class="hero-sensors-title">NVMe</div>
+            <div class="hero-sensors-grid">
+                ${nvme.map(s => `<div class="hero-sensor-item">
+                    <span class="hero-sensor-name">${s.name}</span>
+                    <span class="badge ${tempClass(s.value)}">${s.value.toFixed(1)}°C</span>
+                </div>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Voltages section
+    let voltHtml = '';
+    if (voltages.length > 0) {
+        voltHtml = `<div class="hero-sensors-section">
+            <div class="hero-sensors-title">Voltages</div>
+            <div class="hero-volt-grid">
+                ${voltages.map(v => `<div class="hero-volt-item">
+                    <span class="hero-sensor-name">${v.name}</span>
+                    <span class="hero-volt-value">${v.value.toFixed(3)}V</span>
+                </div>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Network / ACPI line
+    let extraTempsHtml = '';
+    const extraItems = [];
+    if (th.acpi > 0) extraItems.push(`<span class="hero-sensor-item"><span class="hero-sensor-name">ACPI</span><span class="badge ${tempClass(th.acpi)}">${th.acpi.toFixed(1)}°C</span></span>`);
+    network.forEach(s => extraItems.push(`<span class="hero-sensor-item"><span class="hero-sensor-name">NIC ${s.name}</span><span class="badge ${tempClass(s.value)}">${s.value.toFixed(1)}°C</span></span>`));
+    if (extraItems.length > 0) {
+        extraTempsHtml = `<div class="hero-sensors-section hero-sensors-inline">
+            <div class="hero-sensors-title">Other</div>
+            <div class="hero-sensors-row">${extraItems.join('')}</div>
+        </div>`;
+    }
+
+    // Combine all sensor sections
+    const sensorsBlock = (boardHtml || nvmeHtml || voltHtml || extraTempsHtml)
+        ? `<div class="hero-sensors-block">${boardHtml}${nvmeHtml}${voltHtml}${extraTempsHtml}</div>`
+        : '';
 
     return `
     <div class="host-hero" data-host="${h.name}">
@@ -443,6 +506,8 @@ function buildHostHero(h, gpu) {
                 <div class="bar hero-bar"><div class="bar-fill ${barClass(parseFloat(vramPct), 80, 95)}" style="width:${Math.min(vramPct,100)}%"></div></div>
             </div>` : ''}
         </div>
+
+        ${sensorsBlock}
 
         <div class="hero-footer">
             ${fans.length > 0 ? `<div class="hero-fans">${fans.map(f =>

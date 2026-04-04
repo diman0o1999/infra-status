@@ -3,10 +3,22 @@ package models
 import "time"
 
 
+type SensorReading struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
+	High  float64 `json:"high,omitempty"`
+	Crit  float64 `json:"crit,omitempty"`
+}
+
 type ThermalInfo struct {
-	CPUPackage float64   `json:"cpu_package"`
-	CPUCores   []float64 `json:"cpu_cores,omitempty"`
-	Fans       []FanInfo `json:"fans,omitempty"`
+	CPUPackage float64         `json:"cpu_package"`
+	CPUCores   []float64       `json:"cpu_cores,omitempty"`
+	Fans       []FanInfo       `json:"fans,omitempty"`
+	Board      []SensorReading `json:"board,omitempty"`
+	NVMe       []SensorReading `json:"nvme,omitempty"`
+	Network    []SensorReading `json:"network,omitempty"`
+	ACPI       float64         `json:"acpi,omitempty"`
+	Voltages   []SensorReading `json:"voltages,omitempty"`
 }
 
 type FanInfo struct {

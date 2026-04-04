@@ -270,7 +270,7 @@ func (c *SSHCollector) CollectNginxDomains(host config.HostConfig) []string {
 	return domains
 }
 
-// collectThermal parses `sensors` output for CPU package temp and fan RPMs
+// collectThermal parses full `sensors` output: CPU, fans, board temps, NVMe, voltages, network, ACPI
 func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 	info := models.ThermalInfo{}
 
@@ -279,37 +279,200 @@ func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
 		return info
 	}
 
+	// Track which adapter block we are currently in
+	// Possible values: "nct6798", "coretemp", "nvme", "acpitz", "r8169", ""
+	currentAdapter := ""
+
+	// Board sensor names we want to capture (from nct6798)
+	boardSensorNames := map[string]bool{
+		"SYSTIN": true, "CPUTIN": true,
+		"AUXTIN0": true, "AUXTIN1": true, "AUXTIN2": true,
+		"AUXTIN3": true, "AUXTIN4": true,
+	}
+
 	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
+		trimmed := strings.TrimSpace(line)
 
-		// CPU Package temp: "Package id 0:  +51.0°C ..."
-		if strings.HasPrefix(line, "Package id 0:") {
-			if temp := parseTempValue(line); temp > 0 {
-				info.CPUPackage = temp
-			}
+		if trimmed == "" {
+			continue
 		}
 
-		// Per-core temps: "Core 0:  +45.0°C ..."
-		if strings.HasPrefix(line, "Core ") {
-			if temp := parseTempValue(line); temp > 0 {
-				info.CPUCores = append(info.CPUCores, temp)
+		// Chip name lines contain adapter type markers like "-isa-", "-pci-", "-acpi-", "-mdio-", "-virtual-"
+		// These are the block header lines: "nct6798-isa-0290", "coretemp-isa-0000", "nvme-pci-0200", etc.
+		lower := strings.ToLower(trimmed)
+		isChipLine := strings.Contains(lower, "-isa-") || strings.Contains(lower, "-pci-") ||
+			strings.Contains(lower, "-acpi-") || strings.Contains(lower, "-mdio-") ||
+			strings.Contains(lower, "-virtual-")
+
+		if isChipLine {
+			if strings.Contains(lower, "nct6798") {
+				currentAdapter = "nct6798"
+			} else if strings.Contains(lower, "coretemp") {
+				currentAdapter = "coretemp"
+			} else if strings.Contains(lower, "nvme") {
+				currentAdapter = "nvme"
+			} else if strings.Contains(lower, "acpitz") {
+				currentAdapter = "acpitz"
+			} else if strings.Contains(lower, "r8169") || strings.Contains(lower, "iwlwifi") {
+				currentAdapter = "network"
+			} else {
+				currentAdapter = "other"
 			}
+			continue
 		}
 
-		// Fan RPMs: "fan1:  1221 RPM"
-		if strings.Contains(line, " RPM") {
-			parts := strings.Fields(line)
-			// parts[0] = "fan1:", parts[1] = "1221", parts[2] = "RPM"
-			if len(parts) >= 3 {
-				name := strings.TrimSuffix(parts[0], ":")
-				if rpm, err2 := strconv.Atoi(parts[1]); err2 == nil && rpm > 0 {
-					info.Fans = append(info.Fans, models.FanInfo{Name: name, RPM: rpm})
+		// Skip "Adapter: ..." description lines
+		if strings.HasPrefix(trimmed, "Adapter:") {
+			continue
+		}
+
+		switch currentAdapter {
+		case "coretemp":
+			// CPU Package temp: "Package id 0:  +51.0°C ..."
+			if strings.HasPrefix(trimmed, "Package id 0:") {
+				if temp := parseTempValue(trimmed); temp > 0 {
+					info.CPUPackage = temp
+				}
+			}
+			// Per-core temps: "Core 0:  +45.0°C ..."
+			if strings.HasPrefix(trimmed, "Core ") {
+				if temp := parseTempValue(trimmed); temp > 0 {
+					info.CPUCores = append(info.CPUCores, temp)
+				}
+			}
+
+		case "nct6798":
+			// Fan RPMs: "fan1:  1221 RPM  (min = 0 RPM)"
+			if strings.Contains(trimmed, " RPM") {
+				parts := strings.Fields(trimmed)
+				if len(parts) >= 3 {
+					name := strings.TrimSuffix(parts[0], ":")
+					if rpm, err2 := strconv.Atoi(parts[1]); err2 == nil && rpm > 0 {
+						info.Fans = append(info.Fans, models.FanInfo{Name: name, RPM: rpm})
+					}
+				}
+			}
+
+			// Board temps: "SYSTIN:  +32.0°C  (high = +80.0°C, ...)"
+			colonIdx := strings.Index(trimmed, ":")
+			if colonIdx > 0 {
+				name := strings.TrimSpace(trimmed[:colonIdx])
+				if boardSensorNames[name] {
+					if temp := parseTempValue(trimmed); temp > 0 {
+						sr := models.SensorReading{Name: name, Value: temp}
+						sr.High = parseLimitValue(trimmed, "high")
+						sr.Crit = parseLimitValue(trimmed, "crit")
+						info.Board = append(info.Board, sr)
+					}
+				}
+				// PECI Agent: line like "PECI Agent 0 Calibration:  +32.0°C ..."
+				if strings.HasPrefix(name, "PECI Agent") {
+					if temp := parseTempValue(trimmed); temp > 0 {
+						sr := models.SensorReading{Name: "PECI Agent 0", Value: temp}
+						sr.High = parseLimitValue(trimmed, "high")
+						info.Board = append(info.Board, sr)
+					}
+				}
+			}
+
+			// Voltages: "in0:  1.34 V  ..." or "in1:  1000.00 mV ..."
+			if strings.HasPrefix(trimmed, "in") {
+				colonIdx2 := strings.Index(trimmed, ":")
+				if colonIdx2 > 0 {
+					name := strings.TrimSpace(trimmed[:colonIdx2])
+					rest := strings.TrimSpace(trimmed[colonIdx2+1:])
+					var volts float64
+					if strings.Contains(rest, " mV") {
+						// parse millivolts
+						parts := strings.Fields(rest)
+						if len(parts) >= 2 {
+							if v, e := strconv.ParseFloat(parts[0], 64); e == nil {
+								volts = v / 1000.0
+							}
+						}
+					} else if strings.Contains(rest, " V") {
+						parts := strings.Fields(rest)
+						if len(parts) >= 2 {
+							if v, e := strconv.ParseFloat(parts[0], 64); e == nil {
+								volts = v
+							}
+						}
+					}
+					if volts > 0 {
+						info.Voltages = append(info.Voltages, models.SensorReading{
+							Name:  name,
+							Value: volts,
+						})
+					}
+				}
+			}
+
+		case "nvme":
+			// "Composite:  +39.9°C  (low = -273.1°C, high = +80.8°C)"
+			// "Sensor 1:  +48.9°C  ..."
+			// Skip if temp is -273 (no data sentinel)
+			colonIdx := strings.Index(trimmed, ":")
+			if colonIdx > 0 {
+				name := strings.TrimSpace(trimmed[:colonIdx])
+				if temp := parseTempValue(trimmed); temp > -270 && temp != 0 {
+					sr := models.SensorReading{Name: name, Value: temp}
+					sr.High = parseLimitValue(trimmed, "high")
+					sr.Crit = parseLimitValue(trimmed, "crit")
+					info.NVMe = append(info.NVMe, sr)
+				}
+			}
+			// NVMe crit is sometimes on the NEXT line: "(crit = +84.8°C)"
+			// Handle by appending to last NVMe entry if it starts with "("
+			if strings.HasPrefix(trimmed, "(crit") && len(info.NVMe) > 0 {
+				if crit := parseLimitValue(trimmed, "crit"); crit > 0 {
+					info.NVMe[len(info.NVMe)-1].Crit = crit
+				}
+			}
+
+		case "acpitz":
+			// "temp1:  +27.8°C"
+			if strings.HasPrefix(trimmed, "temp") {
+				if temp := parseTempValue(trimmed); temp > 0 {
+					info.ACPI = temp
+				}
+			}
+
+		case "network":
+			// "temp1:  +36.5°C  (high = +120.0°C)" — but only if it has a real value (not N/A)
+			if strings.HasPrefix(trimmed, "temp") && !strings.Contains(trimmed, "N/A") {
+				colonIdx := strings.Index(trimmed, ":")
+				if colonIdx > 0 {
+					name := strings.TrimSpace(trimmed[:colonIdx])
+					if temp := parseTempValue(trimmed); temp > 0 {
+						sr := models.SensorReading{Name: name, Value: temp}
+						sr.High = parseLimitValue(trimmed, "high")
+						info.Network = append(info.Network, sr)
+					}
 				}
 			}
 		}
 	}
 
 	return info
+}
+
+// parseLimitValue extracts a named limit like "high = +80.0°C" or "crit = +100.0°C" from a sensors line
+func parseLimitValue(line, limitName string) float64 {
+	needle := limitName + " = +"
+	idx := strings.Index(line, needle)
+	if idx < 0 {
+		return 0
+	}
+	sub := line[idx+len(needle):]
+	end := strings.IndexAny(sub, "°C ,)")
+	if end < 0 {
+		return 0
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(sub[:end]), 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // parseTempValue extracts temperature float from a sensors line like "+51.0°C"
