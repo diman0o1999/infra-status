@@ -7,6 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+
+type Account struct {
+	Email    string `yaml:"email"`
+	Password string `yaml:"password"`
+	Role     string `yaml:"role"`
+	Note     string `yaml:"note"`
+}
 type Config struct {
 	Server         ServerConfig      `yaml:"server"`
 	Hosts          []HostConfig      `yaml:"hosts"`
@@ -15,6 +22,7 @@ type Config struct {
 	Domains        DomainsConfig     `yaml:"domains"`
 	Kuma           KumaConfig        `yaml:"kuma"`
 	Ollama         OllamaConfig      `yaml:"ollama"`
+	GPU            GPUConfig         `yaml:"gpu"`
 }
 
 type OllamaConfig struct {
@@ -54,12 +62,17 @@ type ThresholdConfig struct {
 }
 
 type ProjectConfig struct {
-	Name        string            `yaml:"name"`
-	Icon        string            `yaml:"icon"`
-	Description string            `yaml:"description"`
-	URLs        ProjectURLs       `yaml:"urls"`
-	Services    ProjectServices   `yaml:"services"`
-	Host        string            `yaml:"host"`
+	Name        string          `yaml:"name"`
+	Icon        string          `yaml:"icon"`
+	Description string          `yaml:"description"`
+	Purpose     string          `yaml:"purpose"`
+	Login       string          `yaml:"login"`
+	Password    string          `yaml:"password"`
+	URLs        ProjectURLs     `yaml:"urls"`
+	LocalURLs   ProjectURLs     `yaml:"local_urls"`
+	Services    ProjectServices `yaml:"services"`
+	Host        string          `yaml:"host"`
+	Accounts    []Account       `yaml:"accounts"`
 }
 
 type ProjectURLs struct {
@@ -91,14 +104,18 @@ type DomainsConfig struct {
 type SubdomainConfig struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+	Login       string `yaml:"login"`
+	Password    string `yaml:"password"`
 }
 
 type CustomDomain struct {
 	Name        string `yaml:"name"`
 	FQDN        string `yaml:"fqdn"`
-	URL         string `yaml:"url"`         // full link URL (e.g. http://192.168.1.71:8006)
+	URL         string `yaml:"url"`
 	Description string `yaml:"description"`
 	Local       bool   `yaml:"local"`
+	Login       string `yaml:"login"`
+	Password    string `yaml:"password"`
 }
 
 func Load(path string) (*Config, error) {
@@ -120,4 +137,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+type GPUConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Host    string `yaml:"host"` // имя хоста из hosts list
 }

@@ -308,8 +308,174 @@ function renderEnvBadge(env) {
     el.style.display = '';
 }
 
+
+function tempClass(t) { return t >= 80 ? "crit" : t >= 65 ? "warn" : "ok"; }
+
+function buildHostExtras(h, gpu) {
+    if (!h.online) return "";
+    let html = "";
+    const th = h.thermal || {};
+
+    if (th.cpu_package > 0) {
+        html += `<div class="metric host-hw"><div class="metric-header">
+            <span class="metric-label">CPU Temp</span>
+            <span class="metric-value badge ${tempClass(th.cpu_package)}" data-host-temp>${th.cpu_package.toFixed(0)}°C</span>
+            </div></div>`;
+    }
+
+    if (gpu && gpu.online) {
+        html += `<div class="metric host-hw"><div class="metric-header">
+            <span class="metric-label">${gpu.name}</span>
+            <span class="metric-value badge ${tempClass(gpu.temp_c)}" data-host-gpu-temp>${gpu.temp_c}°C / ${gpu.util_pct}% / VRAM ${gpu.vram_used_mb}/${gpu.vram_total_mb}MB</span>
+            </div></div>`;
+    }
+
+    if (th.fans && th.fans.length > 0) {
+        const fansStr = th.fans.map(f => f.name + " " + f.rpm + " RPM").join(" · ");
+        html += `<div class="metric host-hw"><div class="metric-header">
+            <span class="metric-label">Fans</span>
+            <span class="metric-value" data-host-fans>${fansStr}</span>
+            </div></div>`;
+    }
+
+    const sw = h.swap || {};
+    if (sw.total > 0) {
+        html += `<div class="metric host-hw"><div class="metric-header">
+            <span class="metric-label">SWAP</span>
+            <span class="metric-value" data-host-swap>${sw.percent.toFixed(1)}% — ${formatBytes(sw.used)} / ${formatBytes(sw.total)}</span>
+            </div></div>`;
+    }
+
+    if (h.procs > 0) {
+        html += `<div class="metric host-hw"><div class="metric-header">
+            <span class="metric-label">Processes</span>
+            <span class="metric-value" data-host-procs>${h.procs}</span>
+            </div></div>`;
+    }
+
+    return html ? `<div class="host-hw-section" data-host-extras>${html}</div>` : "";
+}
+
+
+// --- Host Hero Card (physical server) ---
+function buildHostHero(h, gpu) {
+    if (!h || !h.online) return '';
+    const th = h.thermal || {};
+    const sw = h.swap || {};
+    const cpuTemp = th.cpu_package || 0;
+    const cores = th.cpu_cores || [];
+    const fans = th.fans || [];
+    const g = gpu && gpu.online ? gpu : null;
+    const vramPct = g ? (g.vram_used_mb / g.vram_total_mb * 100).toFixed(0) : 0;
+
+    // Core temps mini heatmap
+    let coresHtml = '';
+    if (cores.length > 0) {
+        coresHtml = '<div class="hero-cores">' + cores.map((c, i) =>
+            `<span class="hero-core-dot ${tempClass(c)}" title="Core ${i}: ${c}°C"></span>`
+        ).join('') + '</div>';
+    }
+
+    return `
+    <div class="host-hero" data-host="${h.name}">
+        <div class="hero-header">
+            <div class="hero-title-row">
+                <svg class="hero-server-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="2" y="2" width="20" height="6" rx="2"/><rect x="2" y="10" width="20" height="6" rx="2"/>
+                    <circle cx="6" cy="5" r="1" fill="currentColor"/><circle cx="6" cy="13" r="1" fill="currentColor"/>
+                    <line x1="10" y1="5" x2="18" y2="5"/><line x1="10" y1="13" x2="18" y2="13"/>
+                    <path d="M6 18v2M12 18v2M18 18v2"/>
+                </svg>
+                <div>
+                    <h2 class="hero-name">${h.name}</h2>
+                    <span class="hero-subtitle">Proxmox VE · ${h.host} · ${t('uptime_prefix')} ${h.uptime}</span>
+                </div>
+                <span class="badge ${h.status} hero-badge">${t(h.status)}</span>
+            </div>
+            <div class="hero-load">${t('load_prefix')} ${h.load}</div>
+        </div>
+
+        <div class="hero-grid">
+            <div class="hero-section">
+                <h3 class="hero-section-title">CPU</h3>
+                <div class="hero-big-value">${h.cpu.toFixed(1)}<span class="hero-unit">%</span></div>
+                <div class="bar hero-bar"><div class="bar-fill ${barClass(h.cpu)}" style="width:${Math.min(h.cpu,100)}%"></div></div>
+                <div class="hero-temp-row">
+                    <span class="hero-temp-label">Package</span>
+                    <span class="hero-temp-value badge ${tempClass(cpuTemp)}" data-hero-cpu-temp>${cpuTemp}°C</span>
+                </div>
+                ${coresHtml}
+            </div>
+
+            <div class="hero-section">
+                <h3 class="hero-section-title">RAM</h3>
+                <div class="hero-big-value">${h.ram.percent.toFixed(1)}<span class="hero-unit">%</span></div>
+                <div class="bar hero-bar"><div class="bar-fill ${barClass(h.ram.percent, 80, 95)}" style="width:${Math.min(h.ram.percent,100)}%"></div></div>
+                <div class="hero-detail">${formatBytes(h.ram.used)} / ${formatBytes(h.ram.total)}</div>
+                ${sw.total > 0 ? `<div class="hero-swap-row"><span class="hero-temp-label">Swap</span><span class="hero-detail">${sw.percent.toFixed(1)}% — ${formatBytes(sw.used)} / ${formatBytes(sw.total)}</span></div>` : ''}
+            </div>
+
+            <div class="hero-section">
+                <h3 class="hero-section-title">Disk</h3>
+                <div class="hero-big-value">${h.disk.percent.toFixed(1)}<span class="hero-unit">%</span></div>
+                <div class="bar hero-bar"><div class="bar-fill ${barClass(h.disk.percent, 80, 95)}" style="width:${Math.min(h.disk.percent,100)}%"></div></div>
+                <div class="hero-detail">${formatBytes(h.disk.used)} / ${formatBytes(h.disk.total)}</div>
+                <div class="hero-detail" style="margin-top:4px;opacity:0.6">${h.procs} processes</div>
+            </div>
+
+            ${g ? `<div class="hero-section hero-gpu">
+                <h3 class="hero-section-title">GPU</h3>
+                <div class="hero-gpu-name">${g.name}</div>
+                <div class="hero-gpu-stats">
+                    <div class="hero-gpu-stat">
+                        <span class="hero-temp-label">Temp</span>
+                        <span class="badge ${tempClass(g.temp_c)}">${g.temp_c}°C</span>
+                    </div>
+                    <div class="hero-gpu-stat">
+                        <span class="hero-temp-label">Load</span>
+                        <span class="hero-detail">${g.util_pct}%</span>
+                    </div>
+                    <div class="hero-gpu-stat">
+                        <span class="hero-temp-label">VRAM</span>
+                        <span class="hero-detail">${vramPct}% — ${g.vram_used_mb}/${g.vram_total_mb} MB</span>
+                    </div>
+                </div>
+                <div class="bar hero-bar"><div class="bar-fill ${barClass(parseFloat(vramPct), 80, 95)}" style="width:${Math.min(vramPct,100)}%"></div></div>
+            </div>` : ''}
+        </div>
+
+        <div class="hero-footer">
+            ${fans.length > 0 ? `<div class="hero-fans">${fans.map(f =>
+                `<span class="hero-fan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12c-1.5-3-4-5-7-4 1-3 4-5 7-4 -3-1.5-5-4-4-7 3 1 5 4 4 7 1.5-3 4-5 7-4-1 3-4 5-7 4 3 1.5 5 4 4 7-3-1-5-4-4-7z"/><circle cx="12" cy="12" r="2"/></svg> ${f.name} <b>${f.rpm}</b> RPM</span>`
+            ).join('')}</div>` : ''}
+            <button class="ssh-copy-btn" onclick="copySSH('${h.host}')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                ssh root@${h.host}
+            </button>
+        </div>
+    </div>`;
+}
+
+function updateHostHero(el, h, gpu) {
+    if (!el || !h || !h.online) return;
+    const th = h.thermal || {};
+    const g = gpu && gpu.online ? gpu : null;
+
+    const tempEl = el.querySelector('[data-hero-cpu-temp]');
+    if (tempEl && th.cpu_package > 0) {
+        tempEl.textContent = th.cpu_package + '°C';
+        tempEl.className = 'hero-temp-value badge ' + tempClass(th.cpu_package);
+    }
+
+    // Rerender on each tick for simplicity (hero is one card)
+    const heroEl = document.getElementById('hostHero');
+    if (heroEl && heroEl.querySelector('[data-host="' + h.name + '"]')) {
+        heroEl.innerHTML = buildHostHero(h, g);
+    }
+}
+
 // --- Host Cards (with SSH copy) ---
-function buildHostCard(h) {
+function buildHostCard(h, gpu) {
     return `
         <div class="host-card ${h.status}" data-host="${h.name}">
             <div class="host-header">
@@ -343,6 +509,7 @@ function buildHostCard(h) {
                 </div>
                 <div class="bar"><div class="bar-fill ${h.online ? barClass(h.disk.percent, 80, 95) : ''}" data-host-disk-bar style="width:${h.online ? Math.min(h.disk.percent, 100) : 0}%"></div></div>
             </div>
+            ${buildHostExtras(h, h.type === "proxmox" ? (window._dashGpu || null) : null)}
             ${h.online ? `<div class="host-footer">
                 <button class="ssh-copy-btn" onclick="copySSH('${h.host}')" title="Скопировать SSH команду">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -377,8 +544,33 @@ function renderHosts(hosts, targetId) {
     const el = document.getElementById(targetId);
     if (!el || !hosts) return;
 
+    // For full hosts tab: render hero separately, VMs in grid
+    if (targetId === 'hostsGridFull') {
+        const heroHost = hosts.find(h => h.type === 'proxmox');
+        const vmHosts = hosts.filter(h => h.type !== 'proxmox');
+        const heroEl = document.getElementById('hostHero');
+
+        // Render hero
+        if (heroEl && heroHost) {
+            const gpu = window._dashGpu || null;
+            heroEl.innerHTML = buildHostHero(heroHost, gpu);
+        }
+
+        // Render VM grid
+        if (!el.children.length || el.children.length !== vmHosts.length) {
+            el.innerHTML = vmHosts.map(h => buildHostCard(h)).join('');
+        } else {
+            vmHosts.forEach(h => {
+                const card = el.querySelector(`[data-host="${h.name}"]`);
+                if (card) updateHostCard(card, h);
+            });
+        }
+        return;
+    }
+
+    // Overview: all hosts in compact grid
     if (!el.children.length || el.children.length !== hosts.length) {
-        el.innerHTML = hosts.map(buildHostCard).join('');
+        el.innerHTML = hosts.map(h => buildHostCard(h)).join('');
     } else {
         hosts.forEach(h => {
             const card = el.querySelector(`[data-host="${h.name}"]`);
@@ -395,7 +587,7 @@ function buildProjectCard(p, compact) {
         : `<span class="project-icon">${getIcon(p.icon)}</span>`;
 
     return `
-        <div class="project-card ${p.status}" data-project="${p.name}">
+        <div class="project-card ${p.status}" data-project="${p.name}" style="cursor:pointer" onclick="openProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">
             <div class="project-header">
                 ${iconHtml}
                 <span class="project-name">${p.name}</span>
@@ -407,19 +599,33 @@ function buildProjectCard(p, compact) {
                 <span class="ram-value" data-proj-ram-val>${formatBytes(p.memory_total || 0)}</span>
             </div>
             <div class="project-endpoints">
-                ${p.web_url ? `
+                ${p.local_web || p.local_api ? `<div class="env-label">DEV (VM100)</div>` : ''}
+                ${p.local_api ? `
                     <div class="endpoint">
-                        <span class="endpoint-dot ${p.web_up ? 'up' : 'down'}" data-proj-web-dot></span>
-                        <span class="endpoint-label">WEB</span>
-                        <a href="${p.web_url}" target="_blank">${p.web_url.replace('https://','')}</a>
-                        <span class="endpoint-status" data-proj-web-code>${p.web_status || ''}</span>
+                        <span class="endpoint-dot up" data-proj-local-api-dot></span>
+                        <span class="endpoint-label">API</span>
+                        <span class="endpoint-url">${p.local_api.replace('http://','').replace('https://','')}</span>
                     </div>` : ''}
+                ${p.local_web ? `
+                    <div class="endpoint">
+                        <span class="endpoint-dot up" data-proj-local-web-dot></span>
+                        <span class="endpoint-label">WEB</span>
+                        <span class="endpoint-url">${p.local_web.replace('http://','').replace('https://','')}</span>
+                    </div>` : ''}
+                ${p.web_url || p.api_url ? `<div class="env-label">PROD (VM200)</div>` : ''}
                 ${p.api_url ? `
                     <div class="endpoint">
                         <span class="endpoint-dot ${p.api_up ? 'up' : 'down'}" data-proj-api-dot></span>
                         <span class="endpoint-label">API</span>
                         <a href="${p.api_url}" target="_blank">${p.api_url.replace('https://','')}</a>
                         <span class="endpoint-status" data-proj-api-code>${p.api_status || ''}</span>
+                    </div>` : ''}
+                ${p.web_url ? `
+                    <div class="endpoint">
+                        <span class="endpoint-dot ${p.web_up ? 'up' : 'down'}" data-proj-web-dot></span>
+                        <span class="endpoint-label">WEB</span>
+                        <a href="${p.web_url}" target="_blank">${p.web_url.replace('https://','')}</a>
+                        <span class="endpoint-status" data-proj-web-code>${p.web_status || ''}</span>
                     </div>` : ''}
             </div>
             ${!compact && p.services && p.services.length ? `<div class="project-services" data-proj-svcs>
@@ -473,6 +679,39 @@ function renderProjects(projects, targetId, compact) {
             if (card) updateProjectCard(card, p);
         });
     }
+}
+
+// --- Projects env filter ---
+let _currentEnvFilter = 'all';
+function filterProjectsByEnv(env) {
+    _currentEnvFilter = env;
+    document.querySelectorAll('.env-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.env === env);
+    });
+    const cards = document.querySelectorAll('#projectsGridFull .project-card');
+    cards.forEach(card => {
+        if (env === 'all') { card.style.display = ''; return; }
+        const endpoints = card.querySelectorAll('.env-label');
+        const hasEnv = Array.from(endpoints).some(el => {
+            if (env === 'dev') return el.textContent.includes('DEV');
+            if (env === 'prod') return el.textContent.includes('PROD');
+            return true;
+        });
+        card.style.display = hasEnv ? '' : 'none';
+        // Hide opposite env sections
+        card.querySelectorAll('.env-label').forEach(el => {
+            const section = el;
+            let next = section.nextElementSibling;
+            const isTarget = (env === 'dev' && el.textContent.includes('DEV')) ||
+                             (env === 'prod' && el.textContent.includes('PROD'));
+            const isOther = !isTarget;
+            section.style.display = env === 'all' ? '' : (isOther ? 'none' : '');
+            while (next && !next.classList.contains('env-label')) {
+                next.style.display = env === 'all' ? '' : (isOther ? 'none' : '');
+                next = next.nextElementSibling;
+            }
+        });
+    });
 }
 
 // --- Infra Grid ---
@@ -534,12 +773,131 @@ function renderKuma(monitors, targetId) {
     }
 }
 
-// --- Domains ---
-function initDomainsFilter() {
-    const q = document.getElementById('domainsFilter');
-    const s = document.getElementById('domainsTypeFilter');
-    if (q) q.addEventListener('input', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
-    if (s) s.addEventListener('change', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
+
+const PROJECT_DOMAIN_MAP = {
+    'cargo': 'Cargo',      'cargo-api': 'Cargo',
+    'fabro': 'Fabro',      'fabro-api': 'Fabro',
+    'puls': 'Puls',        'puls-api': 'Puls',
+    'emedic': 'e-medic',   'emedic-api': 'e-medic',
+    'skazki': 'Skazki',    'skazki-api': 'Skazki',
+    'kraeved': 'Краевед',  'kraeved-api': 'Краевед',
+    'logist23': 'Logist23','logist23-api': 'Logist23',
+    'racia': 'Racia',      'api.racia': 'Racia',
+    'api': 'Racia',
+};
+
+const INFRA_DOMAINS = new Set([
+    'tasks','status','grafana','admin','ai','errors','logs','s3','search','info','cdn'
+]);
+
+
+// --- Domain Modal ---
+let _domainModalDomain = null;
+
+function openDomainModal(d) {
+    _domainModalDomain = d;
+    const modal = document.getElementById('domainModal');
+    if (!modal) return;
+
+    document.getElementById('domainModalIcon').textContent = getDomainIcon(d.name) && getDomainIcon(d.name).startsWith('<svg') ? '' : getDomainIcon(d.name);
+    document.getElementById('domainModalName').textContent = d.name;
+
+    const href = d.url || 'https://' + d.fqdn;
+    let body = '';
+
+    body += '<div class="domain-modal-row">' +
+        '<span class="domain-modal-label">URL</span>' +
+        '<span class="domain-modal-val"><a href="' + href + '" target="_blank">' + d.fqdn + '</a></span>' +
+        '</div>';
+
+    if (d.description) {
+        body += '<div class="domain-modal-row">' +
+            '<span class="domain-modal-label">Описание</span>' +
+            '<span class="domain-modal-val">' + d.description + '</span>' +
+            '</div>';
+    }
+
+    if (d.local) {
+        body += '<div class="domain-modal-row">' +
+            '<span class="domain-modal-label">Тип</span>' +
+            '<span class="domain-modal-val">🏠 LAN (локальный)</span>' +
+            '</div>';
+    }
+
+    if (d.login) {
+        body += '<div class="domain-modal-row">' +
+            '<span class="domain-modal-label">Логин</span>' +
+            '<div class="domain-cred-row" style="flex:1">' +
+            '<span class="domain-cred-val">' + d.login + '</span>' +
+            '<button class="domain-cred-copy" onclick="navigator.clipboard.writeText(\'' + d.login + '\').then(()=>showCopyToast(\'' + d.login + '\'))" title="Копировать">' +
+            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
+            '</button></div></div>';
+    }
+
+    if (d.password) {
+        body += '<div class="domain-modal-row">' +
+            '<span class="domain-modal-label">Пароль</span>' +
+            '<div class="domain-cred-row" style="flex:1">' +
+            '<span class="domain-cred-val" id="modalPwdVal" data-show="false">••••••••</span>' +
+            '<button class="domain-cred-toggle" onclick="toggleModalPwd(\'' + d.password + '\')" title="Показать/скрыть">👁</button>' +
+            '<button class="domain-cred-copy" onclick="navigator.clipboard.writeText(\'' + d.password + '\').then(()=>showCopyToast(\'copied\'))" title="Копировать">' +
+            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>' +
+            '</button></div></div>';
+    }
+
+    if (!d.login && !d.password) {
+        body += '<div class="domain-modal-row">' +
+            '<span class="domain-modal-label"></span>' +
+            '<span class="domain-modal-val" style="color:var(--text-muted);font-style:italic">Без авторизации</span>' +
+            '</div>';
+    }
+
+    document.getElementById('domainModalBody').innerHTML = body;
+    modal.classList.remove('hidden');
+}
+
+function toggleModalPwd(pwd) {
+    const el = document.getElementById('modalPwdVal');
+    if (!el) return;
+    const showing = el.dataset.show === 'true';
+    el.dataset.show = showing ? 'false' : 'true';
+    el.textContent = showing ? '••••••••' : pwd;
+}
+
+function closeDomainModal() {
+    document.getElementById('domainModal')?.classList.add('hidden');
+}
+
+function initDomainModal() {
+    document.getElementById('domainModalClose')?.addEventListener('click', closeDomainModal);
+    document.getElementById('domainModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeDomainModal();
+    });
+}
+
+// --- Keys Button (navbar) - opens domains overview modal ---
+function initKeysBtn() {
+    document.getElementById('keysBtn')?.addEventListener('click', () => {
+        if (!lastData || !lastData.domains) return;
+        const hasCredentials = lastData.domains.filter(d => d.login || d.password);
+        if (hasCredentials.length > 0) {
+            openDomainModal(hasCredentials[0]);
+        } else {
+            switchTab('domains');
+        }
+    });
+}
+
+
+
+// --- Domains: grouped by project ---
+function getDomainGroup(d) {
+    if (d.local) return '__lan__';
+    const name = d.name.toLowerCase();
+    const proj = PROJECT_DOMAIN_MAP[name];
+    if (proj) return proj;
+    if (INFRA_DOMAINS.has(name)) return '__infra__';
+    return '__other__';
 }
 
 function renderDomains(domains, targetId, full) {
@@ -555,44 +913,83 @@ function renderDomains(domains, targetId, full) {
             if (typeF === 'cloud' && d.local) return false;
             if (typeF === 'lan' && !d.local) return false;
             if (typeF === 'down' && d.reachable !== false) return false;
+            if (typeF === 'keys' && !d.login && !d.password) return false;
             return true;
         });
 
-        el.innerHTML = `
-            <table class="services-table">
-                <thead>
-                    <tr>
-                        <th style="width:28px"></th>
-                        <th>Домен</th>
-                        <th>Адрес</th>
-                        <th>Описание</th>
-                        <th>Тип</th>
-                        <th>Статус</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${filtered.length ? filtered.map(d => {
-                        const icon = getDomainIcon(d.name);
-                        const isSvg = icon && icon.startsWith('<svg');
-                        const href = d.url || 'https://' + d.fqdn;
-                        return `<tr style="cursor:pointer" onclick="window.open('${href}','_blank')">
-                            <td><span style="font-size:14px;${isSvg ? 'display:flex' : ''}">${icon}</span></td>
-                            <td style="font-weight:600">${d.name}</td>
-                            <td class="mono" style="font-size:11px;color:var(--text-muted)">${d.fqdn}</td>
-                            <td style="color:var(--text-secondary);font-size:12px">${d.description || '—'}</td>
-                            <td>${d.local ? '🏠 LAN' : '☁️'}</td>
-                            <td><span class="badge ${d.reachable !== false ? 'ok' : 'crit'}">${d.reachable !== false ? 'up' : 'down'}</span></td>
-                        </tr>`;
-                    }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Нет доменов</td></tr>`}
-                </tbody>
-            </table>`;
+        // Group domains
+        const groups = {};
+        filtered.forEach(d => {
+            const g = getDomainGroup(d);
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(d);
+        });
+
+        // Render order: projects first (sorted), then infra, then lan, then other
+        const projectNames = Object.keys(groups).filter(k => k !== '__infra__' && k !== '__lan__' && k !== '__other__').sort();
+        const groupOrder = [...projectNames, '__infra__', '__lan__', '__other__'];
+
+        const GROUP_META = {
+            '__infra__': { title: 'Инфраструктура', icon: '⚙️' },
+            '__lan__': { title: 'LAN / Локальные', icon: '🏠' },
+            '__other__': { title: 'Прочие', icon: '🌐' },
+        };
+
+        let html = '';
+        groupOrder.forEach(g => {
+            if (!groups[g] || !groups[g].length) return;
+            const meta = GROUP_META[g] || { title: g, icon: getProjectLogo(g) ? '' : '📦' };
+            const logoHtml = getProjectLogo(g)
+                ? '<span style="width:20px;height:20px;display:flex">' + getProjectLogo(g) + '</span>'
+                : '<span>' + meta.icon + '</span>';
+
+            html += '<div class="domains-group">' +
+                '<div class="domains-group-header">' +
+                logoHtml +
+                '<span class="domains-group-title">' + meta.title + '</span>' +
+                '<span class="domains-group-count">' + groups[g].length + '</span>' +
+                '</div>';
+
+            groups[g].forEach(d => {
+                const href = d.url || 'https://' + d.fqdn;
+                const hasKey = d.login || d.password;
+                const domIcon = getDomainIcon(d.name);
+                const isSvgIcon = domIcon && domIcon.startsWith('<svg');
+                const iconHtml = isSvgIcon
+                    ? '<span style="width:16px;height:16px;display:flex;flex-shrink:0">' + domIcon + '</span>'
+                    : '<span style="font-size:14px;flex-shrink:0">' + domIcon + '</span>';
+
+                html += '<div class="domain-row-item" onclick="openDomainModal(' + JSON.stringify(d).replace(/"/g, '&quot;') + ')">' +
+                    iconHtml +
+                    '<span class="domain-row-name">' + d.name + '</span>' +
+                    '<span class="domain-row-fqdn">' + d.fqdn + '</span>' +
+                    '<span class="domain-row-desc">' + (d.description || '') + '</span>' +
+                    '<div class="domain-row-badges">' +
+                    (d.local ? '<span class="domain-lan-badge">LAN</span>' : '') +
+                    (hasKey ? '<span class="domain-key-icon">🔑</span>' : '') +
+                    '<span class="badge ' + (d.reachable !== false ? 'ok' : 'crit') + '" style="font-size:9px;padding:1px 5px">' + (d.reachable !== false ? 'up' : 'down') + '</span>' +
+                    '</div>' +
+                    '</div>';
+            });
+
+            html += '</div>';
+        });
+
+        el.innerHTML = html || '<div style="text-align:center;color:var(--text-muted);padding:24px">Нет доменов</div>';
+
     } else {
-        el.innerHTML = domains.filter(d => !d.local).map(d => `
-            <a class="domain-tag ${d.reachable === false ? 'unreachable' : ''}" href="${d.url || 'https://' + d.fqdn}" target="_blank" title="${d.description || d.fqdn}">
-                <span class="endpoint-dot ${d.reachable !== false ? 'up' : 'down'}" style="flex-shrink:0;margin-right:2px"></span>
-                ${d.name}
-            </a>`).join('');
+        // Overview widget: compact tags
+        el.innerHTML = domains.filter(d => !d.local).slice(0, 20).map(d => '<a class="domain-tag ' + (d.reachable === false ? 'unreachable' : '') + '" href="' + (d.url || 'https://' + d.fqdn) + '" target="_blank" title="' + (d.description || d.fqdn) + '">' +
+            '<span class="endpoint-dot ' + (d.reachable !== false ? 'up' : 'down') + '" style="flex-shrink:0;margin-right:2px"></span>' +
+            d.name + '</a>').join('');
     }
+}
+
+function initDomainsFilter() {
+    const q = document.getElementById('domainsFilter');
+    const s = document.getElementById('domainsTypeFilter');
+    if (q) q.addEventListener('input', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
+    if (s) s.addEventListener('change', () => { if (lastData) renderDomains(lastData.domains, 'domainsGridFull', true); });
 }
 
 // --- Services Table ---
@@ -693,6 +1090,157 @@ function updateBanner(data) {
     }
 }
 
+// --- Ollama + GPU Widget ---
+function renderOllama(gpu, ollama) {
+    const el = document.getElementById('ollamaWidget');
+    if (!el) return;
+
+    const vramPct = (gpu && gpu.online && gpu.vram_total_mb)
+        ? (gpu.vram_used_mb / gpu.vram_total_mb * 100) : 0;
+
+    const gpuHtml = gpu && gpu.online
+        ? '<div class="ollama-row ollama-gpu-name">' +
+          '<span>' + gpu.name + '</span>' +
+          '<span class="badge ok">GPU online</span>' +
+          '</div>' +
+          '<div class="metric">' +
+          '<div class="metric-header">' +
+          '<span class="metric-label">VRAM</span>' +
+          '<span class="metric-value">' + vramPct.toFixed(0) + '% — ' + gpu.vram_used_mb + ' / ' + gpu.vram_total_mb + ' MB</span>' +
+          '</div>' +
+          '<div class="bar"><div class="bar-fill ' + barClass(vramPct, 80, 95) + '" style="width:' + Math.min(vramPct, 100) + '%"></div></div>' +
+          '</div>' +
+          '<div class="ollama-gpu-meta">' +
+          '<span>🌡 ' + gpu.temp_c + '°C</span>' +
+          '<span>⚡ ' + gpu.util_pct + '%</span>' +
+          '</div>'
+        : '<div class="ollama-row"><span class="badge crit">GPU offline</span></div>';
+
+    const modelsHtml = (ollama && ollama.online && ollama.models && ollama.models.length)
+        ? '<div class="ollama-models">' +
+          ollama.models.map(m => '<span class="ollama-model-tag">' + m.name.replace(':latest', '') + '</span>').join('') +
+          '</div>'
+        : '';
+
+    el.innerHTML =
+        '<div class="ollama-gpu-section">' + gpuHtml + '</div>' +
+        '<div class="ollama-models-section">' +
+        '<div class="ollama-row">' +
+        '<span class="metric-label">Ollama</span>' +
+        '<span class="badge ' + (ollama && ollama.online ? 'ok' : 'crit') + '">' + (ollama && ollama.online ? 'online' : 'offline') + '</span>' +
+        '</div>' +
+        modelsHtml +
+        '</div>';
+}
+
+
+// --- Project Detail Modal ---
+function openProjectModal(p) {
+    const modal = document.getElementById('projectDetailModal');
+    if (!modal) return;
+
+    const logo = getProjectLogo(p.name);
+    const titleEl = document.getElementById('projModalTitle');
+    titleEl.innerHTML =
+        (logo ? '<span style="width:28px;height:28px;display:flex;flex-shrink:0">' + logo + '</span>'
+               : '<span style="font-size:20px">' + getIcon(p.icon) + '</span>') +
+        '<span>' + p.name + '</span>' +
+        '<span class="badge ' + p.status + '" style="font-size:11px">' + t(p.status) + '</span>';
+
+    let body = '';
+
+    if (p.purpose || p.description) {
+        body += '<div style="background:var(--bg-secondary);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.5">' +
+            (p.purpose || p.description) + '</div>';
+    }
+
+    // Production URLs
+    body += '<div style="margin-bottom:14px"><div class="proj-section-title">Продакшн</div>';
+    if (p.web_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.web_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + p.web_url + '" target="_blank">' + p.web_url + '</a>' + (p.web_status ? ' <span style="color:var(--text-muted);font-size:11px">' + p.web_status + '</span>' : '') + '</span></div>';
+    if (p.api_url) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><span class="endpoint-dot ' + (p.api_up ? 'up' : 'down') + '" style="margin-right:6px"></span><a href="' + p.api_url + '" target="_blank">' + p.api_url + '</a>' + (p.api_status ? ' <span style="color:var(--text-muted);font-size:11px">' + p.api_status + '</span>' : '') + '</span></div>';
+    body += '</div>';
+
+    // Local URLs
+    if (p.local_web || p.local_api) {
+        body += '<div style="margin-bottom:14px"><div class="proj-section-title">🏠 Локальные (LAN)</div>';
+        if (p.local_web) body += '<div class="domain-modal-row"><span class="domain-modal-label">WEB</span><span class="domain-modal-val"><a href="' + p.local_web + '" target="_blank">' + p.local_web + '</a></span></div>';
+        if (p.local_api) body += '<div class="domain-modal-row"><span class="domain-modal-label">API</span><span class="domain-modal-val"><a href="' + p.local_api + '" target="_blank">' + p.local_api + '</a></span></div>';
+        body += '</div>';
+    }
+
+    // Accounts table
+    if (p.accounts && p.accounts.length) {
+        body += '<div style="margin-bottom:14px"><div class="proj-section-title">\u{1F511} \u{423}\u{447}\u{451}\u{442}\u{43D}\u{44B}\u{435} \u{437}\u{430}\u{43F}\u{438}\u{441}\u{438}</div>';
+        body += '<table class="accounts-table"><thead><tr><th>Email</th><th>\u{420}\u{43E}\u{43B}\u{44C}</th><th>\u{41F}\u{430}\u{440}\u{43E}\u{43B}\u{44C}</th><th>\u{417}\u{430}\u{43C}\u{435}\u{442}\u{43A}\u{430}</th><th></th></tr></thead><tbody>';
+        p.accounts.forEach((a, idx) => {
+            const pwdId = 'apwd_' + idx + '_' + p.name.replace(/[^a-z0-9]/gi, '');
+            body += '<tr>' +
+                '<td class="mono" style="font-size:11px">' + a.email + '</td>' +
+                '<td><span class="role-badge">' + (a.role || '-') + '</span></td>' +
+                '<td><span id="' + pwdId + '" data-pwd="' + (a.password||'') + '" data-show="false" style="font-family:var(--font-mono);font-size:11px">' + (a.password ? '\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}' : '\u{2014}') + '</span></td>' +
+                '<td style="font-size:11px;color:var(--text-muted)">' + (a.note || '') + '</td>' +
+                '<td style="white-space:nowrap">' +
+                (a.password ? '<button class="domain-cred-toggle" data-pwd-target="' + pwdId + '" title="\u{41F}\u{43E}\u{43A}\u{430}\u{437}\u{430}\u{442}\u{44C}" style="margin-right:3px">\u{1F441}</button>' : '') +
+                '<button class="domain-cred-copy" data-copy="' + (a.email||'') + '" title="Copy email"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>' +
+                '</td></tr>';
+        });
+        body += '</tbody></table></div>';
+    }
+
+        // Services
+    if (p.services && p.services.length) {
+        body += '<div><div class="proj-section-title">Сервисы</div>';
+        body += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        p.services.forEach(s => {
+            body += '<span class="svc-tag ' + (s.active ? 'active' : 'inactive') + '">' + s.name + (s.memory ? ' · ' + formatBytes(s.memory) : '') + '</span>';
+        });
+        body += '</div>';
+        if (p.memory_total) body += '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Всего RAM: ' + formatBytes(p.memory_total) + '</div>';
+        body += '</div>';
+    }
+
+    const bodyEl = document.getElementById('projModalBody');
+    bodyEl.innerHTML = body;
+
+    // Wire up copy buttons
+    bodyEl.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.copy).then(() => showCopyToast(btn.dataset.copy));
+        });
+    });
+
+    // Wire up password toggles (table rows use data-pwd-target)
+    bodyEl.querySelectorAll('[data-pwd-target]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const el = document.getElementById(btn.dataset.pwdTarget);
+            if (!el) return;
+            const showing = el.dataset.show === 'true';
+            el.dataset.show = showing ? 'false' : 'true';
+            el.textContent = showing ? '••••••••' : el.dataset.pwd;
+        });
+    });
+    // Legacy single-field toggle
+    const pwdVal = bodyEl.querySelector('.proj-pwd-val');
+    bodyEl.querySelector('.proj-pwd-toggle')?.addEventListener('click', () => {
+        if (!pwdVal) return;
+        const showing = pwdVal.dataset.show === 'true';
+        pwdVal.dataset.show = showing ? 'false' : 'true';
+        pwdVal.textContent = showing ? '••••••••' : pwdVal.dataset.pwd;
+    });
+
+    modal.classList.remove('hidden');
+}
+
+
+function initProjectModal() {
+    document.getElementById('projModalClose')?.addEventListener('click', () => {
+        document.getElementById('projectDetailModal')?.classList.add('hidden');
+    });
+    document.getElementById('projectDetailModal')?.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.add('hidden');
+    });
+}
+
 // --- Main Render ---
 function render(data) {
     renderEnvBadge(data.env);
@@ -704,6 +1252,7 @@ function render(data) {
     renderDomains(data.domains, 'domainsGridOverview', false);
     renderKuma(data.kuma, 'kumaGridOverview');
     renderServicesTable(data, 'servicesTableOverview');
+    window._dashGpu = data.gpu; renderOllama(data.gpu, data.ollama);
 
     renderHosts(data.hosts, 'hostsGridFull');
     renderProjects(data.projects, 'projectsGridFull', false);
@@ -724,7 +1273,7 @@ function render(data) {
 }
 
 // --- Routing ---
-const VALID_TABS = ['overview', 'hosts', 'projects', 'services', 'domains'];
+const VALID_TABS = ['overview', 'hosts', 'projects', 'services'];
 
 function switchTab(tabId) {
     if (!VALID_TABS.includes(tabId)) tabId = 'overview';
@@ -1162,6 +1711,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initWidgets();
     initServicesFilter();
     initDomainsFilter();
+    initDomainModal();
+    initKeysBtn();
+    initProjectModal();
     initSearch();
     initReloadConfig();
     initChat();

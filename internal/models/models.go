@@ -2,6 +2,24 @@ package models
 
 import "time"
 
+
+type ThermalInfo struct {
+	CPUPackage float64   `json:"cpu_package"`
+	CPUCores   []float64 `json:"cpu_cores,omitempty"`
+	Fans       []FanInfo `json:"fans,omitempty"`
+}
+
+type FanInfo struct {
+	Name string `json:"name"`
+	RPM  int    `json:"rpm"`
+}
+
+type SwapInfo struct {
+	Total   uint64  `json:"total"`
+	Used    uint64  `json:"used"`
+	Percent float64 `json:"percent"`
+}
+
 // HostMetrics holds system-level metrics collected via SSH
 type HostMetrics struct {
 	Name       string  `json:"name"`
@@ -13,6 +31,9 @@ type HostMetrics struct {
 	Disk       DiskInfo `json:"disk"`
 	Load       string  `json:"load"`
 	Uptime     string  `json:"uptime"`
+	Thermal    ThermalInfo `json:"thermal"`
+	Swap       SwapInfo    `json:"swap"`
+	Procs      int         `json:"procs"`
 	Status     string  `json:"status"` // ok, warn, crit, offline
 	CollectedAt time.Time `json:"collected_at"`
 }
@@ -44,15 +65,21 @@ type ProjectStatus struct {
 	Name        string          `json:"name"`
 	Icon        string          `json:"icon"`
 	Description string          `json:"description"`
+	Purpose     string          `json:"purpose"`
+	Login       string          `json:"login,omitempty"`
+	Password    string          `json:"password,omitempty"`
 	WebURL      string          `json:"web_url"`
 	ApiURL      string          `json:"api_url"`
+	LocalWeb    string          `json:"local_web,omitempty"`
+	LocalAPI    string          `json:"local_api,omitempty"`
 	WebUp       bool            `json:"web_up"`
 	ApiUp       bool            `json:"api_up"`
 	WebStatus   int             `json:"web_status"`
 	ApiStatus   int             `json:"api_status"`
 	Services    []ServiceStatus `json:"services"`
-	MemoryTotal uint64          `json:"memory_total"` // sum of all services RAM
-	Status      string          `json:"status"`       // ok, degraded, down
+	MemoryTotal uint64          `json:"memory_total"`
+	Status      string          `json:"status"`
+	Accounts    []Account       `json:"accounts,omitempty"`
 }
 
 // InfraService holds status of an infrastructure service
@@ -70,11 +97,13 @@ type InfraService struct {
 type DomainInfo struct {
 	Name        string `json:"name"`
 	FQDN        string `json:"fqdn"`
-	URL         string `json:"url,omitempty"`  // override link (for local/LAN domains)
+	URL         string `json:"url,omitempty"`
 	Description string `json:"description"`
 	Reachable   bool   `json:"reachable"`
-	Host        string `json:"host,omitempty"` // which VM's nginx serves this domain
-	Local       bool   `json:"local,omitempty"` // true = LAN-only, not public
+	Host        string `json:"host,omitempty"`
+	Local       bool   `json:"local,omitempty"`
+	Login       string `json:"login,omitempty"`
+	Password    string `json:"password,omitempty"`
 }
 
 // KumaMonitor holds Uptime Kuma monitor data
@@ -100,4 +129,36 @@ type Dashboard struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 	Alive          bool            `json:"alive"`
 	Env            string          `json:"env"` // "dev" or "prod"
+	Ollama         OllamaInfo      `json:"ollama"`
+	GPU            GPUInfo         `json:"gpu"`
+}
+
+
+type Account struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+	Note     string `json:"note"`
+}
+// OllamaModel — одна модель Ollama
+type OllamaModel struct {
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+// OllamaInfo — статус Ollama
+type OllamaInfo struct {
+	Online bool          `json:"online"`
+	Models []OllamaModel `json:"models"`
+}
+
+// GPUInfo — GPU метрики (nvidia-smi)
+type GPUInfo struct {
+	Online      bool   `json:"online"`
+	Name        string `json:"name"`
+	TempC       int    `json:"temp_c"`
+	UtilPct     int    `json:"util_pct"`
+	VRAMUsedMB  int    `json:"vram_used_mb"`
+	VRAMTotalMB int    `json:"vram_total_mb"`
+	Host        string `json:"host"`
 }

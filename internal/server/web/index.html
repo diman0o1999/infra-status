@@ -38,6 +38,12 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
             <div class="topbar-divider"></div>
+            <!-- Keys Button -->
+            <button class="keys-btn" id="keysBtn" title="Логины и пароли">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m15 7-1.5 1.5L15 10l2-2"/><path d="m12 12 5-5"/><path d="m19 5-1 1"/></svg>
+                Keys
+            </button>
+            <div class="topbar-divider"></div>
             <!-- Language Toggle -->
             <div class="toggle-group" id="langToggle">
                 <button class="toggle-btn active" data-lang="ru">RU</button>
@@ -62,7 +68,6 @@
             <button class="tab" data-tab="hosts" data-i18n="tab_hosts">Hosts</button>
             <button class="tab" data-tab="projects" data-i18n="tab_projects">Projects</button>
             <button class="tab" data-tab="services" data-i18n="tab_services">Services</button>
-            <button class="tab" data-tab="domains" data-i18n="tab_domains">Domains</button>
         </div>
         <div class="tabs-actions">
             <button class="edit-toggle" id="editToggle" title="Edit layout">
@@ -201,11 +206,17 @@
 
         <!-- HOSTS TAB -->
         <div class="tab-content" id="tab-hosts">
+            <div id="hostHero"></div>
             <div class="hosts-grid-full" id="hostsGridFull"></div>
         </div>
 
         <!-- PROJECTS TAB -->
         <div class="tab-content" id="tab-projects">
+            <div class="env-toggle-bar">
+                <button class="env-toggle-btn active" data-env="all" onclick="filterProjectsByEnv('all')">Все</button>
+                <button class="env-toggle-btn" data-env="dev" onclick="filterProjectsByEnv('dev')">DEV (VM100)</button>
+                <button class="env-toggle-btn" data-env="prod" onclick="filterProjectsByEnv('prod')">PROD (VM200)</button>
+            </div>
             <div class="projects-grid-full" id="projectsGridFull"></div>
         </div>
 
@@ -222,19 +233,7 @@
             <div class="services-table-wrap" id="servicesTable"></div>
         </div>
 
-        <!-- DOMAINS TAB -->
-        <div class="tab-content" id="tab-domains">
-            <div class="filter-bar">
-                <input class="filter-input" id="domainsFilter" type="search" placeholder="Поиск по домену или описанию...">
-                <select class="filter-select" id="domainsTypeFilter">
-                    <option value="all">Все</option>
-                    <option value="cloud">☁️ Облако</option>
-                    <option value="lan">🏠 LAN</option>
-                    <option value="down">Недоступные</option>
-                </select>
-            </div>
-            <div class="services-table-wrap" id="domainsGridFull"></div>
-        </div>
+        <!-- DOMAINS TAB removed -->
     </main>
 
     <!-- Error Overlay -->
@@ -281,6 +280,33 @@
             <div id="searchResults" class="search-results">
                 <div class="search-hint">Начните вводить для поиска</div>
             </div>
+        </div>
+    </div>
+
+
+    <!-- Domain Info Modal -->
+    <div class="domain-modal-backdrop hidden" id="domainModal">
+        <div class="domain-modal" id="domainModalContent">
+            <div class="domain-modal-header">
+                <div class="domain-modal-title" id="domainModalTitle">
+                    <span id="domainModalIcon"></span>
+                    <span id="domainModalName"></span>
+                </div>
+                <button class="domain-modal-close" id="domainModalClose">✕</button>
+            </div>
+            <div id="domainModalBody"></div>
+        </div>
+    </div>
+
+
+    <!-- Project Detail Modal -->
+    <div class="domain-modal-backdrop hidden" id="projectDetailModal">
+        <div class="domain-modal" id="projectDetailContent" style="width:520px;max-height:85vh;overflow-y:auto">
+            <div class="domain-modal-header">
+                <div class="domain-modal-title" id="projModalTitle"></div>
+                <button class="domain-modal-close" id="projModalClose">✕</button>
+            </div>
+            <div id="projModalBody"></div>
         </div>
     </div>
 

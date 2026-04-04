@@ -148,6 +148,36 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 		m.Uptime = strings.TrimPrefix(uptimeOut, "up ")
 	}
 
+	// Thermal (CPU package temp, fans) — only for bare-metal proxmox hosts
+	if host.Type == "proxmox" {
+		m.Thermal = c.collectThermal(client)
+	}
+
+	// Swap usage
+	swapOut, err := c.runCommand(client, `free -b | awk '/Swap:/ {printf "%d %d", $2, $3}'`)
+	if err == nil {
+		parts := strings.Fields(swapOut)
+		if len(parts) == 2 {
+			total, _ := strconv.ParseUint(parts[0], 10, 64)
+			used, _ := strconv.ParseUint(parts[1], 10, 64)
+			if total > 0 {
+				m.Swap = models.SwapInfo{
+					Total:   total,
+					Used:    used,
+					Percent: float64(used) / float64(total) * 100,
+				}
+			}
+		}
+	}
+
+	// Process count
+	procsOut, err := c.runCommand(client, `ps aux --no-heading 2>/dev/null | wc -l`)
+	if err == nil {
+		if v, e := strconv.Atoi(strings.TrimSpace(procsOut)); e == nil {
+			m.Procs = v
+		}
+	}
+
 	// Determine status based on thresholds
 	m.Status = "ok"
 	if m.CPU >= host.Thresholds.CPUWarn || m.RAM.Percent >= host.Thresholds.RAMWarn || m.Disk.Percent >= host.Thresholds.DiskWarn {
@@ -238,6 +268,70 @@ func (c *SSHCollector) CollectNginxDomains(host config.HostConfig) []string {
 		}
 	}
 	return domains
+}
+
+// collectThermal parses `sensors` output for CPU package temp and fan RPMs
+func (c *SSHCollector) collectThermal(client *ssh.Client) models.ThermalInfo {
+	info := models.ThermalInfo{}
+
+	out, err := c.runCommand(client, "sensors 2>/dev/null")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return info
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+
+		// CPU Package temp: "Package id 0:  +51.0°C ..."
+		if strings.HasPrefix(line, "Package id 0:") {
+			if temp := parseTempValue(line); temp > 0 {
+				info.CPUPackage = temp
+			}
+		}
+
+		// Per-core temps: "Core 0:  +45.0°C ..."
+		if strings.HasPrefix(line, "Core ") {
+			if temp := parseTempValue(line); temp > 0 {
+				info.CPUCores = append(info.CPUCores, temp)
+			}
+		}
+
+		// Fan RPMs: "fan1:  1221 RPM"
+		if strings.Contains(line, " RPM") {
+			parts := strings.Fields(line)
+			// parts[0] = "fan1:", parts[1] = "1221", parts[2] = "RPM"
+			if len(parts) >= 3 {
+				name := strings.TrimSuffix(parts[0], ":")
+				if rpm, err2 := strconv.Atoi(parts[1]); err2 == nil && rpm > 0 {
+					info.Fans = append(info.Fans, models.FanInfo{Name: name, RPM: rpm})
+				}
+			}
+		}
+	}
+
+	return info
+}
+
+// parseTempValue extracts temperature float from a sensors line like "+51.0°C"
+func parseTempValue(line string) float64 {
+	idx := strings.Index(line, "+")
+	if idx < 0 {
+		return 0
+	}
+	sub := line[idx+1:] // skip the +
+	// Find degree sign or end markers
+	end := strings.Index(sub, "°")
+	if end < 0 {
+		end = strings.IndexAny(sub, " 	(")
+	}
+	if end < 0 {
+		return 0
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(sub[:end]), 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 func (c *SSHCollector) Close() {

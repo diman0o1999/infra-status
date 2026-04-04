@@ -12,11 +12,12 @@ import (
 
 // Collector orchestrates all data collection
 type Collector struct {
-	cfg      *config.Config
-	cfgPath  string
-	ssh      *SSHCollector
-	http     *HTTPChecker
-	kuma     *KumaCollector
+	cfg          *config.Config
+	cfgPath      string
+	ssh          *SSHCollector
+	http         *HTTPChecker
+	kuma         *KumaCollector
+	ollamaStatus *OllamaStatusCollector
 	mu       sync.RWMutex
 	state    models.Dashboard
 	onChange func(models.Dashboard)
@@ -24,10 +25,11 @@ type Collector struct {
 
 func New(cfg *config.Config, cfgPath string) *Collector {
 	c := &Collector{
-		cfg:     cfg,
-		cfgPath: cfgPath,
-		ssh:     NewSSHCollector(cfg.Hosts),
-		http:    NewHTTPChecker(),
+		cfg:          cfg,
+		cfgPath:      cfgPath,
+		ssh:          NewSSHCollector(cfg.Hosts),
+		http:         NewHTTPChecker(),
+		ollamaStatus: NewOllamaStatusCollector(cfg.Ollama.URL),
 	}
 	if cfg.Kuma.Enabled && cfg.Kuma.URL != "" {
 		c.kuma = NewKumaCollector(cfg.Kuma.URL, cfg.Kuma.Slug)
@@ -46,6 +48,7 @@ func (c *Collector) Reload() error {
 	oldSSH := c.ssh
 	c.cfg = cfg
 	c.ssh = newSSH
+	c.ollamaStatus = NewOllamaStatusCollector(cfg.Ollama.URL)
 	if cfg.Kuma.Enabled && cfg.Kuma.URL != "" {
 		c.kuma = NewKumaCollector(cfg.Kuma.URL, cfg.Kuma.Slug)
 	} else {
@@ -125,6 +128,16 @@ func (c *Collector) collect() {
 
 	wg.Wait()
 
+	// GPU metrics
+	if c.cfg.GPU.Enabled && c.cfg.GPU.Host != "" {
+		dashboard.GPU = c.ssh.CollectGPU(c.cfg.GPU.Host)
+	}
+
+	// Ollama status
+	if c.cfg.Ollama.Enabled && c.cfg.Ollama.URL != "" && c.ollamaStatus != nil {
+		dashboard.Ollama = c.ollamaStatus.Collect()
+	}
+
 	// Kuma monitors
 	if c.kuma != nil {
 		kumaData, err := c.kuma.Collect()
@@ -169,8 +182,21 @@ func (c *Collector) collectProject(p config.ProjectConfig) models.ProjectStatus 
 		Name:        p.Name,
 		Icon:        p.Icon,
 		Description: p.Description,
+		Purpose:     p.Purpose,
+		Login:       p.Login,
+		Password:    p.Password,
 		WebURL:      p.URLs.Web,
 		ApiURL:      p.URLs.API,
+		LocalWeb:    p.LocalURLs.Web,
+		LocalAPI:    p.LocalURLs.API,
+	}
+	for _, a := range p.Accounts {
+		ps.Accounts = append(ps.Accounts, models.Account{
+			Email:    a.Email,
+			Password: a.Password,
+			Role:     a.Role,
+			Note:     a.Note,
+		})
 	}
 
 	// HTTP health checks
@@ -233,11 +259,15 @@ func (c *Collector) collectInfra(i config.InfraConfig) models.InfraService {
 }
 
 func (c *Collector) collectDomains() []models.DomainInfo {
-	// Build description lookup from static config
+	// Build description/credentials lookup from static config
 	descMap := make(map[string]string)
+	loginMap := make(map[string]string)
+	passMap := make(map[string]string)
 	for _, sub := range c.cfg.Domains.Subdomains {
 		fqdn := sub.Name + "." + c.cfg.Domains.Base
 		descMap[fqdn] = sub.Description
+		loginMap[fqdn] = sub.Login
+		passMap[fqdn] = sub.Password
 	}
 
 	// Discover nginx domains from all hosts concurrently
@@ -275,6 +305,8 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 				Description: descMap[fqdn],
 				Reachable:   true,
 				Host:        r.hostName,
+				Login:       loginMap[fqdn],
+				Password:    passMap[fqdn],
 			})
 		}
 	}
@@ -288,6 +320,8 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 				FQDN:        fqdn,
 				Description: sub.Description,
 				Reachable:   false,
+				Login:       sub.Login,
+				Password:    sub.Password,
 			})
 		}
 	}
@@ -305,6 +339,8 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 			Description: cd.Description,
 			Reachable:   true,
 			Local:       cd.Local,
+			Login:       cd.Login,
+			Password:    cd.Password,
 		})
 	}
 

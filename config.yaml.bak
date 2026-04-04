@@ -1,0 +1,405 @@
+server:
+  port: 3301
+  refresh_interval: 10s
+  env: dev
+
+ollama:
+  enabled: true
+  url: http://ollama:11434
+  model: huihui_ai/qwen3-abliterated:14b
+
+hosts:
+  - name: prox-host
+    host: 192.168.1.71
+    ssh_user: root
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: proxmox
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
+  - name: prox-dev
+    host: 192.168.1.112
+    ssh_user: dev
+    ssh_key: /home/dev/.ssh/id_rsa
+    type: vm
+    thresholds:
+      cpu_warn: 70
+      cpu_crit: 90
+      ram_warn: 80
+      ram_crit: 95
+      disk_warn: 80
+      disk_crit: 95
+
+projects:
+  - name: Cargo
+    icon: truck
+    description: "Биржа грузоперевозок 24tir.ru"
+    purpose: "B2B-платформа: заказчики публикуют грузы, перевозчики берут заявки. Автоматический матчинг, тендеры, трекинг."
+    urls:
+      web: https://cargo.core-stack.ru
+      api: https://cargo-api.core-stack.ru
+    local_urls:
+      web: http://192.168.1.112:8080
+      api: http://192.168.1.112:3000
+    accounts:
+      - email: volkov@rosagro-trade.ru
+        password: "Demo1234!"
+        role: shipper
+        note: Заказчик — РосАгроТрейд
+      - email: petrov@autotrans-yug.ru
+        password: "Demo1234!"
+        role: carrier
+        note: Перевозчик — АвтоТранс-Юг
+      - email: morozov@morozov-trans.ru
+        password: "Demo1234!"
+        role: carrier
+        note: Перевозчик — Морозов Транс
+    services:
+      system:
+        - cargo-backend
+        - cargo-sidekiq
+        - cargo-anycable-rpc
+        - anycable-go
+    host: prox-dev
+
+  - name: Fabro
+    icon: factory
+    description: "Калькуляторы для производств"
+    purpose: "Мультиниша: 15 типов производств, 7 калькуляторов стоимости. Заказчик вводит параметры — получает цену и форму заявки."
+    urls:
+      web: https://fabro.core-stack.ru
+      api: https://fabro-api.core-stack.ru
+    local_urls:
+      web: ""
+      api: ""
+    accounts:
+      - email: admin@fabro.local
+        password: "password123"
+        role: admin
+        note: Администратор
+      - email: operator@fabro.local
+        password: "password123"
+        role: operator
+        note: Оператор
+      - email: customer@fabro.local
+        password: "password123"
+        role: customer
+        note: Заказчик
+      - email: supplier@fabro.local
+        password: "password123"
+        role: supplier
+        note: Поставщик
+    services:
+      user:
+        - fabro-api
+        - fabro-web
+        - fabro-sidekiq
+        - fabro-anycable-rpc
+        - fabro-anycable-go
+    host: prox-dev
+
+  - name: Puls
+    icon: heart-pulse
+    description: "Мониторинг транспорта"
+    purpose: "Трекинг грузовиков в реальном времени: GPS-точки, маршруты, геозоны, уведомления диспетчеру."
+    urls:
+      web: https://puls.core-stack.ru
+      api: https://puls-api.core-stack.ru
+    local_urls:
+      web: http://192.168.1.112:3051
+      api: http://192.168.1.112:3050
+    accounts:
+      - email: admin@puls.local
+        password: "password123"
+        role: super_admin
+        note: Супер-администратор
+      - email: user@puls.local
+        password: "password123"
+        role: user
+        note: Пользователь
+    services:
+      user:
+        - puls-backend
+        - puls-frontend
+    host: prox-dev
+
+  - name: e-medic
+    icon: stethoscope
+    description: "Медицинская платформа"
+    purpose: "Цифровизация клиник: расписание, приёмы, медкарты, интеграция с лабораториями и ФОМС."
+    urls:
+      web: https://emedic.core-stack.ru
+      api: https://emedic-api.core-stack.ru
+    local_urls:
+      web: http://192.168.1.112:3002
+      api: http://192.168.1.112:3001
+    accounts:
+      - email: admin@emedic.app
+        password: "admin123"
+        role: admin
+        note: Главный администратор
+      - email: dev@emedic.app
+        password: "password123"
+        role: admin
+        note: Dev-администратор
+    services:
+      system:
+        - emedic-api
+        - emedic-web
+        - emedic-queue
+    host: prox-dev
+
+  - name: Skazki
+    icon: book-open
+    description: "AI-генератор детских сказок"
+    purpose: "Родитель задаёт имя ребёнка, тему, мораль — AI генерирует уникальную иллюстрированную сказку за 30 секунд."
+    urls:
+      web: https://skazki.core-stack.ru
+      api: https://skazki-api.core-stack.ru
+    local_urls:
+      web: http://192.168.1.112:3091
+      api: http://192.168.1.112:3090
+    accounts:
+      - email: admin@skazki.local
+        password: "password123"
+        role: admin
+        note: Администратор
+      - email: parent@skazki.local
+        password: "password123"
+        role: parent
+        note: Родитель (тест)
+    services:
+      user: []
+    host: prox-dev
+
+  - name: Краевед
+    icon: map-pin
+    description: "AI-путеводитель по России"
+    purpose: "Туристический гид: 9000+ объектов культурного наследия, маршруты, AR-метки, интеграция с 2GIS и Tripster."
+    urls:
+      web: https://kraeved.core-stack.ru
+      api: https://kraeved-api.core-stack.ru
+    local_urls:
+      web: http://192.168.1.112:3091
+      api: http://192.168.1.112:3090
+    accounts:
+      - email: admin@kraeved.local
+        password: "password"
+        role: admin
+        note: Администратор
+      - email: mikhail@kraeved.demo
+        password: "password"
+        role: user
+        note: Демо-пользователь
+    services:
+      user: []
+    host: prox-dev
+
+  - name: Logist23
+    icon: clipboard-list
+    description: "Управление грузоперевозками"
+    purpose: "ERP для транспортных компаний: заявки, рейсы, водители, ТС, документооборот. Rails 8 + Avo admin."
+    urls:
+      web: https://logist23.core-stack.ru
+      api: https://logist23-api.core-stack.ru
+    local_urls:
+      web: ""
+      api: ""
+    accounts:
+      - email: admin@logist23.local
+        password: "password"
+        role: admin
+        note: Администратор
+      - email: yulia@logist23.local
+        password: "password"
+        role: logist
+        note: Логист Юлия
+      - email: nikita@logist23.local
+        password: "password"
+        role: logist
+        note: Логист Никита
+    services:
+      user: []
+    host: prox-dev
+
+  - name: Racia
+    icon: radio
+    description: "WiFi PTT + BLE mesh, аналог Zello для РФ"
+    purpose: "Push-to-talk рация поверх WiFi и BLE-меш для складов, стройплощадок, охраны. Работает без интернета."
+    urls:
+      web: https://racia.core-stack.ru
+      api: https://api.racia.core-stack.ru
+    local_urls:
+      web: ""
+      api: ""
+    accounts:
+      - email: admin@racia.local
+        password: "password123"
+        role: admin
+        note: Администратор
+    services:
+      user:
+        - racia-api
+        - racia-web
+    host: prox-dev
+
+
+infrastructure:
+  - name: PostgreSQL
+    service: postgresql@16-main
+    host: prox-dev
+    port: 5432
+    level: system
+
+  - name: Redis
+    service: redis-server
+    host: prox-dev
+    port: 6379
+    level: system
+
+  - name: nginx
+    service: nginx
+    host: prox-dev
+    port: 80
+    level: system
+
+  - name: fail2ban
+    service: fail2ban
+    host: prox-dev
+    level: system
+
+  - name: SSH
+    service: ssh
+    host: prox-dev
+    port: 22
+    level: system
+
+  - name: SMB
+    service: smbd
+    host: prox-dev
+    port: 445
+    level: system
+
+  - name: Grafana
+    service: grafana-server
+    host: prox-dev
+    port: 3200
+    level: system
+    optional: true
+
+  - name: Docker
+    service: docker
+    host: prox-dev
+    level: system
+    optional: true
+
+domains:
+  base: core-stack.ru
+  ip: 185.49.243.237
+  subdomains:
+    - name: cargo
+      description: "Cargo Web"
+    - name: cargo-api
+      description: "Cargo API"
+    - name: fabro
+      description: "Fabro Web"
+    - name: fabro-api
+      description: "Fabro API"
+    - name: puls
+      description: "Puls Web"
+    - name: puls-api
+      description: "Puls API"
+    - name: skazki
+      description: "Skazki Web"
+    - name: skazki-api
+      description: "Skazki API"
+    - name: kraeved
+      description: "Kraеved Web"
+    - name: kraeved-api
+      description: "Kraеved API"
+    - name: logist23
+      description: "Logist23 Web"
+    - name: logist23-api
+      description: "Logist23 API"
+    - name: racia
+      description: "Racia Web"
+    - name: api.racia
+      description: "Racia API"
+    - name: tasks
+      description: "Planka — канбан доски"
+    - name: status
+      description: "Uptime Kuma"
+    - name: grafana
+      description: "Grafana"
+    - name: admin
+      description: "Admin panel"
+    - name: ai
+      description: "AI сервисы"
+    - name: errors
+      description: "GlitchTip — ошибки"
+    - name: logs
+      description: "Grafana Loki"
+    - name: s3
+      description: "MinIO S3"
+    - name: search
+      description: "Meilisearch"
+    - name: info
+      description: "Инфра-дашборд"
+
+  custom:
+    - name: proxmox
+      fqdn: 192.168.1.71:8006
+      url: https://192.168.1.71:8006
+      description: "Proxmox VE — гипервизор"
+      local: true
+      login: root
+      password: ""
+
+    - name: minio-console
+      fqdn: 192.168.1.202:9001
+      url: http://192.168.1.202:9001
+      description: "MinIO Console — S3 хранилище"
+      local: true
+      login: admin
+      password: ""
+
+    - name: grafana-lan
+      fqdn: 192.168.1.202:3200
+      url: http://192.168.1.202:3200
+      description: "Grafana — метрики (LAN)"
+      local: true
+      login: admin
+      password: ""
+
+    - name: planka-lan
+      fqdn: 192.168.1.202:3004
+      url: http://192.168.1.202:3004
+      description: "Planka — канбан (LAN)"
+      local: true
+      login: admin
+      password: ""
+
+    - name: glitchtip-lan
+      fqdn: 192.168.1.202:3002
+      url: http://192.168.1.202:3002
+      description: "GlitchTip — ошибки (LAN)"
+      local: true
+      login: admin
+      password: ""
+
+    - name: ollama-lan
+      fqdn: 192.168.1.112:11434
+      url: http://192.168.1.112:11434
+      description: "Ollama — LLM на GPU (LAN)"
+      local: true
+      login: ""
+      password: ""
+
+gpu:
+  enabled: true
+  host: prox-host
