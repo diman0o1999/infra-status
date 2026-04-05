@@ -358,3 +358,36 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 func (c *Collector) Stop() {
 	c.ssh.Close()
 }
+
+// RunServiceAction delegates to the SSH collector to execute a systemctl action
+// on the named host. It acquires a read lock so config is stable during the call.
+func (c *Collector) RunServiceAction(hostName, service, level, action string) (string, error) {
+	c.mu.RLock()
+	ssh := c.ssh
+	c.mu.RUnlock()
+	return ssh.RunServiceAction(hostName, service, level, action)
+}
+
+// GetServiceLogs delegates to the SSH collector to retrieve journalctl output
+// for a service on the named host.
+func (c *Collector) GetServiceLogs(hostName, service, level string, lines int) ([]string, error) {
+	c.mu.RLock()
+	ssh := c.ssh
+	c.mu.RUnlock()
+	return ssh.GetServiceLogs(hostName, service, level, lines)
+}
+
+// FindProject returns the ProjectConfig for the given project name (case-insensitive)
+// and a boolean indicating whether it was found. Used by control handlers.
+func (c *Collector) FindProject(name string) (projectHost string, systemServices []string, userServices []string, found bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	nameLower := strings.ToLower(name)
+	for _, p := range c.cfg.Projects {
+		if strings.ToLower(p.Name) == nameLower {
+			return p.Host, p.Services.System, p.Services.User, true
+		}
+	}
+	return "", nil, nil, false
+}

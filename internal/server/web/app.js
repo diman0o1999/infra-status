@@ -100,6 +100,19 @@ const I18N = {
         monitors_up: 'Мониторы',
         projects_ok: 'Проектов ок',
         copied: 'Скопировано',
+        ctrl_start: 'Старт',
+        ctrl_stop: 'Стоп',
+        ctrl_restart: 'Рестарт',
+        ctrl_logs: 'Логи',
+        ctrl_confirm_stop: 'Остановить',
+        ctrl_confirm_restart: 'Перезапустить',
+        logs_title: 'Логи',
+        logs_refresh: 'Обновить',
+        logs_close: 'Закрыть',
+        logs_loading: 'Загрузка логов...',
+        logs_empty: 'Нет данных',
+        logs_service_label: 'Сервис',
+        logs_lines: 'строк',
     },
     en: {
         connecting: 'Connecting...',
@@ -158,6 +171,19 @@ const I18N = {
         monitors_up: 'Monitors',
         projects_ok: 'Projects OK',
         copied: 'Copied',
+        ctrl_start: 'Start',
+        ctrl_stop: 'Stop',
+        ctrl_restart: 'Restart',
+        ctrl_logs: 'Logs',
+        ctrl_confirm_stop: 'Stop',
+        ctrl_confirm_restart: 'Restart',
+        logs_title: 'Logs',
+        logs_refresh: 'Refresh',
+        logs_close: 'Close',
+        logs_loading: 'Loading logs...',
+        logs_empty: 'No data',
+        logs_service_label: 'Service',
+        logs_lines: 'lines',
     }
 };
 
@@ -175,6 +201,7 @@ const state = {
     isFirstRender: true,
     currentEnvFilter: 'all',
     domainModalDomain: null,
+    logsModal: { open: false, project: null, service: null },
 };
 
 function t(key) { return I18N[state.lang][key] || I18N['en'][key] || key; }
@@ -747,6 +774,24 @@ function buildProjectCard(p, compact) {
             ${!compact && p.services && p.services.length ? `<div class="project-services" data-proj-svcs>
                 ${p.services.map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${escapeHtml(s.name)}">${escapeHtml(s.name)}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
             </div>` : ''}
+            ${!compact ? `<div class="project-controls" data-for-status="${escapeHtml(p.status)}" onclick="event.stopPropagation()">
+                ${p.status !== 'running' ? `<button class="ctrl-btn primary" data-ctrl-action="start" data-ctrl-project="${escapeHtml(p.name)}" title="${t('ctrl_start')}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    ${t('ctrl_start')}
+                </button>` : ''}
+                ${p.status === 'running' ? `<button class="ctrl-btn danger" data-ctrl-action="stop" data-ctrl-project="${escapeHtml(p.name)}" title="${t('ctrl_stop')}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                    ${t('ctrl_stop')}
+                </button>` : ''}
+                <button class="ctrl-btn" data-ctrl-action="restart" data-ctrl-project="${escapeHtml(p.name)}" title="${t('ctrl_restart')}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    ${t('ctrl_restart')}
+                </button>
+                <button class="ctrl-btn" data-ctrl-action="logs" data-ctrl-project="${escapeHtml(p.name)}" title="${t('ctrl_logs')}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    ${t('ctrl_logs')}
+                </button>
+            </div>` : ''}
         </div>`;
 }
 
@@ -780,6 +825,38 @@ function updateProjectCard(card, p) {
                 setText(tag, s.name + (s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''));
             }
         });
+    }
+
+    // Rebuild controls bar when status changes (Start/Stop visibility depends on status)
+    const controls = card.querySelector('.project-controls');
+    if (controls) {
+        const prevStatus = controls.dataset.forStatus;
+        if (prevStatus !== p.status) {
+            controls.dataset.forStatus = p.status;
+            const startBtn = controls.querySelector('[data-ctrl-action="start"]');
+            const stopBtn = controls.querySelector('[data-ctrl-action="stop"]');
+            const isRunning = p.status === 'running';
+
+            if (isRunning && startBtn) {
+                // Replace start with stop
+                const newStop = document.createElement('button');
+                newStop.className = 'ctrl-btn danger';
+                newStop.dataset.ctrlAction = 'stop';
+                newStop.dataset.ctrlProject = p.name;
+                newStop.title = t('ctrl_stop');
+                newStop.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> ${t('ctrl_stop')}`;
+                controls.replaceChild(newStop, startBtn);
+            } else if (!isRunning && stopBtn) {
+                // Replace stop with start
+                const newStart = document.createElement('button');
+                newStart.className = 'ctrl-btn primary';
+                newStart.dataset.ctrlAction = 'start';
+                newStart.dataset.ctrlProject = p.name;
+                newStart.title = t('ctrl_start');
+                newStart.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${t('ctrl_start')}`;
+                controls.replaceChild(newStart, stopBtn);
+            }
+        }
     }
 }
 
@@ -1501,8 +1578,187 @@ function showCopyToast(text) {
     const toast = document.getElementById('copyToast');
     if (!toast) return;
     toast.textContent = `${t('copied')}: ${text}`;
+    toast.classList.remove('toast-error');
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), COPY_TOAST_DURATION_MS);
+}
+
+// --- Action Toast (success/error variants for project controls) ---
+const TOAST_ERROR_DISMISS_MS = 0; // 0 = stays until dismissed; success uses COPY_TOAST_DURATION_MS
+
+function showActionToast(text, isError) {
+    const toast = document.getElementById('copyToast');
+    if (!toast) return;
+
+    // Clear any pending auto-hide
+    if (toast._hideTimer) { clearTimeout(toast._hideTimer); toast._hideTimer = null; }
+
+    toast.textContent = text;
+    if (isError) {
+        toast.classList.add('toast-error');
+        toast.style.pointerEvents = 'auto';
+        toast.style.cursor = 'pointer';
+        toast.onclick = () => {
+            toast.classList.remove('visible');
+            toast.classList.remove('toast-error');
+            toast.style.pointerEvents = '';
+            toast.style.cursor = '';
+            toast.onclick = null;
+        };
+    } else {
+        toast.classList.remove('toast-error');
+        toast.style.pointerEvents = '';
+        toast.style.cursor = '';
+        toast.onclick = null;
+        toast._hideTimer = setTimeout(() => {
+            toast.classList.remove('visible');
+        }, COPY_TOAST_DURATION_MS);
+    }
+    toast.classList.add('visible');
+}
+
+// --- Project Controls (Start / Stop / Restart) ---
+async function projectControl(projectName, action) {
+    const btn = document.querySelector(`[data-ctrl-action="${action}"][data-ctrl-project="${projectName}"]`);
+    if (btn) { btn.disabled = true; btn.classList.add('ctrl-btn-loading'); }
+
+    try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+        showActionToast(`${escapeHtml(projectName)}: ${action} \u2713`, false);
+    } catch (e) {
+        showActionToast(`${escapeHtml(projectName)}: ${action} \u2014 ${e.message}`, true);
+    } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('ctrl-btn-loading'); }
+    }
+}
+
+// --- Logs Modal ---
+function openLogsModal(projectName, services) {
+    state.logsModal = { open: true, project: projectName, service: services && services.length ? services[0].name : null };
+
+    const modal = document.getElementById('logsModal');
+    if (!modal) return;
+
+    document.getElementById('logsModalTitle').textContent = `${t('logs_title')} \u2014 ${projectName}`;
+
+    // Build service selector options
+    const select = document.getElementById('logsServiceSelect');
+    select.innerHTML = '';
+    if (services && services.length) {
+        services.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.name;
+            opt.textContent = s.name;
+            select.appendChild(opt);
+        });
+        select.style.display = '';
+    } else {
+        // No services listed — fall back to project name; selector hidden
+        const opt = document.createElement('option');
+        opt.value = projectName;
+        opt.textContent = projectName;
+        select.appendChild(opt);
+        select.style.display = 'none';
+    }
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    refreshLogs();
+}
+
+function closeLogsModal() {
+    state.logsModal.open = false;
+    const modal = document.getElementById('logsModal');
+    if (modal) modal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function refreshLogs() {
+    const { project } = state.logsModal;
+    if (!project) return;
+
+    const select = document.getElementById('logsServiceSelect');
+    const service = select ? select.value : project;
+    state.logsModal.service = service;
+
+    const content = document.getElementById('logsContent');
+    if (!content) return;
+
+    content.textContent = t('logs_loading');
+
+    try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(project)}/logs?lines=100&service=${encodeURIComponent(service)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const lines = data.lines || data.output || data.log || '';
+        content.textContent = lines || t('logs_empty');
+    } catch (e) {
+        content.textContent = `Error: ${e.message}`;
+    }
+
+    // Auto-scroll to bottom
+    const body = document.getElementById('logsBody');
+    if (body) body.scrollTop = body.scrollHeight;
+}
+
+function initProjectControls() {
+    // Event delegation on document body — works for dynamically rendered cards
+    document.body.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-ctrl-action]');
+        if (!btn) return;
+
+        e.stopPropagation();
+
+        const action = btn.dataset.ctrlAction;
+        const project = btn.dataset.ctrlProject;
+        if (!project) return;
+
+        if (action === 'logs') {
+            // Find current project data for service list
+            const projectData = state.data && state.data.projects
+                ? state.data.projects.find(p => p.name === project)
+                : null;
+            openLogsModal(project, projectData ? projectData.services : null);
+            return;
+        }
+
+        if (action === 'stop') {
+            if (!confirm(`${t('ctrl_confirm_stop')} ${project}?`)) return;
+        }
+        if (action === 'restart') {
+            if (!confirm(`${t('ctrl_confirm_restart')} ${project}?`)) return;
+        }
+
+        await projectControl(project, action);
+    });
+}
+
+function initLogsModal() {
+    const modal = document.getElementById('logsModal');
+    if (!modal) return;
+
+    document.getElementById('logsCloseBtn')?.addEventListener('click', closeLogsModal);
+    document.getElementById('logsRefreshBtn')?.addEventListener('click', refreshLogs);
+    document.getElementById('logsServiceSelect')?.addEventListener('change', refreshLogs);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeLogsModal();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && state.logsModal.open) {
+            e.preventDefault();
+            closeLogsModal();
+        }
+    });
 }
 
 // --- Global Search ---
@@ -1893,6 +2149,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initReloadConfig();
     initChat();
     initSshCopyButtons();
+    initProjectControls();
+    initLogsModal();
     applyI18n();
     connect();
 });

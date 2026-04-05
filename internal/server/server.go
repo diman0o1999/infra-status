@@ -106,6 +106,10 @@ func (s *Server) Start() error {
 	// Config hot-reload
 	mux.HandleFunc("/api/reload", s.handleReload)
 
+	// Service control: start / stop / restart / logs
+	// Registered as a prefix so /api/projects/{name}/{action} is routed here.
+	mux.HandleFunc("/api/projects/", s.handleProjectRoute)
+
 	// AI Chat (RAG over infra state)
 	mux.HandleFunc("/api/chat", s.handleChat)
 

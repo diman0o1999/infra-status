@@ -310,6 +310,27 @@
         </div>
     </div>
 
+    <!-- Logs Modal -->
+    <div class="logs-modal-overlay hidden" id="logsModal">
+        <div class="logs-modal">
+            <div class="logs-header">
+                <span class="logs-title" id="logsModalTitle">Логи</span>
+                <button class="logs-close-btn" id="logsCloseBtn" title="Закрыть">&#x2715;</button>
+            </div>
+            <div class="logs-footer">
+                <label class="logs-service-label" for="logsServiceSelect">Сервис</label>
+                <select class="logs-service-select" id="logsServiceSelect"></select>
+                <button class="ctrl-btn primary" id="logsRefreshBtn">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Обновить
+                </button>
+            </div>
+            <div class="logs-body" id="logsBody">
+                <pre class="logs-content" id="logsContent">Загрузка...</pre>
+            </div>
+        </div>
+    </div>
+
     <!-- Copy Toast -->
     <div id="copyToast" class="copy-toast"></div>
 

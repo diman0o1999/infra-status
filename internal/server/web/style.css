@@ -2766,3 +2766,171 @@ body.edit-mode .widget-actions {
     font-size: 0.78rem;
     color: var(--text-muted);
 }
+
+/* --- Project Controls Bar --- */
+.project-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0 0 0;
+    margin-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-base);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.ctrl-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text);
+}
+
+.ctrl-btn:disabled,
+.ctrl-btn.ctrl-btn-loading {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.ctrl-btn.danger:hover {
+    background: var(--red);
+    color: white;
+    border-color: var(--red);
+}
+
+.ctrl-btn.primary:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* --- Toast error variant --- */
+.copy-toast.toast-error {
+    background: var(--red);
+    color: white;
+}
+
+/* --- Logs Modal --- */
+.logs-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.logs-modal-overlay.hidden {
+    display: none;
+}
+
+.logs-modal {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 80vw;
+    max-width: 900px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.logs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.logs-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.logs-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.logs-close-btn:hover {
+    color: var(--text);
+    background: var(--bg-surface-hover);
+}
+
+.logs-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.logs-service-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.logs-service-select {
+    font-size: 12px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-base);
+    color: var(--text);
+    cursor: pointer;
+    max-width: 220px;
+    transition: border-color 0.15s;
+}
+
+.logs-service-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.logs-body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+}
+
+.logs-content {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-secondary);
+    margin: 0;
+}
