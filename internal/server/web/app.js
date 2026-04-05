@@ -774,7 +774,8 @@ function buildProjectCard(p, compact) {
             ${!compact && p.services && p.services.length ? `<div class="project-services" data-proj-svcs>
                 ${p.services.map(s => `<span class="svc-tag ${s.active ? 'active' : 'inactive'}" data-svc="${escapeHtml(s.name)}">${escapeHtml(s.name)}${s.memory ? ' \u00b7 ' + formatBytes(s.memory) : ''}</span>`).join('')}
             </div>` : ''}
-            ${!compact ? `<div class="project-controls" data-for-status="${escapeHtml(p.status)}" onclick="event.stopPropagation()">
+            ${!compact && (p.local_api || p.local_web) ? `<div class="project-controls" data-for-status="${escapeHtml(p.status)}" data-env="dev" onclick="event.stopPropagation()">
+                <span class="ctrl-env-label">DEV</span>
                 ${p.status !== 'running' ? `<button class="ctrl-btn primary" data-ctrl-action="start" data-ctrl-project="${escapeHtml(p.name)}" title="${t('ctrl_start')}">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     ${t('ctrl_start')}
@@ -877,6 +878,8 @@ function renderProjects(projects, targetId, compact) {
 // --- Projects env filter ---
 function filterProjectsByEnv(env) {
     state.currentEnvFilter = env;
+    document.body.classList.remove('env-dev', 'env-prod', 'env-all');
+    document.body.classList.add('env-' + env);
     document.querySelectorAll('.env-toggle-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.env === env);
     });

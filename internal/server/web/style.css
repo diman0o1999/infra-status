@@ -2775,6 +2775,23 @@ body.edit-mode .widget-actions {
     padding: 8px 0 0 0;
     margin-top: 10px;
     border-top: 1px solid var(--border-subtle);
+    align-items: center;
+}
+
+.ctrl-env-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 2px;
+}
+
+/* Hide controls when PROD filter is active */
+body.env-prod .project-controls[data-env="dev"] {
+    display: none;
 }
 
 .ctrl-btn {
