@@ -90,9 +90,11 @@ func (c *SSHCollector) findHost(name string) (config.HostConfig, bool) {
 }
 
 // systemctlCmd builds the correct systemctl invocation for the given level.
+// System-level services require sudo because the SSH session runs as a
+// non-root user. User-level services use --user and never need sudo.
 func systemctlCmd(level, action, service string) string {
 	if level == "user" {
 		return fmt.Sprintf("systemctl --user %s %s", action, service)
 	}
-	return fmt.Sprintf("systemctl %s %s", action, service)
+	return fmt.Sprintf("sudo systemctl %s %s", action, service)
 }
