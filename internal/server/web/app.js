@@ -113,6 +113,17 @@ const I18N = {
         logs_empty: 'Нет данных',
         logs_service_label: 'Сервис',
         logs_lines: 'строк',
+        dev_monitor: 'Dev Monitor',
+        restart_all: 'Перезапустить все',
+        stop_all: 'Остановить все',
+        start_all: 'Запустить все',
+        service_active: 'Активен',
+        service_inactive: 'Неактивен',
+        log_lines: 'Строк',
+        auto_scroll: 'Автопрокрутка',
+        refresh: 'Обновить',
+        no_logs: 'Нет логов',
+        loading_logs: 'Загрузка...',
     },
     en: {
         connecting: 'Connecting...',
@@ -184,6 +195,17 @@ const I18N = {
         logs_empty: 'No data',
         logs_service_label: 'Service',
         logs_lines: 'lines',
+        dev_monitor: 'Dev Monitor',
+        restart_all: 'Restart all',
+        stop_all: 'Stop all',
+        start_all: 'Start all',
+        service_active: 'Active',
+        service_inactive: 'Inactive',
+        log_lines: 'Lines',
+        auto_scroll: 'Auto-scroll',
+        refresh: 'Refresh',
+        no_logs: 'No logs',
+        loading_logs: 'Loading...',
     }
 };
 
@@ -202,6 +224,7 @@ const state = {
     currentEnvFilter: 'all',
     domainModalDomain: null,
     logsModal: { open: false, project: null, service: null },
+    devMonitor: { open: false, project: null, activeService: null, lines: 50, autoScroll: true },
 };
 
 function t(key) { return I18N[state.lang][key] || I18N['en'][key] || key; }
@@ -730,7 +753,7 @@ function buildProjectCard(p, compact) {
         : `<span class="project-icon">${getIcon(p.icon)}</span>`;
 
     return `
-        <div class="project-card ${p.status}" data-project="${escapeHtml(p.name)}" style="cursor:pointer" onclick="openProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+        <div class="project-card ${p.status}" data-project="${escapeHtml(p.name)}" style="cursor:pointer" onclick="routeProjectClick(${JSON.stringify(p).replace(/"/g, '&quot;')})">
             <div class="project-header">
                 ${iconHtml}
                 <span class="project-name">${escapeHtml(p.name)}</span>
@@ -1390,6 +1413,280 @@ function renderOllama(gpu, ollama) {
 }
 
 
+// --- Project click router ---
+function routeProjectClick(p) {
+    // Dev Monitor for DEV projects (have local_api or local_web) unless PROD-only filter active
+    const isDevProject = !!(p.local_api || p.local_web);
+    const filterIsProdOnly = state.currentEnvFilter === 'prod';
+    if (isDevProject && !filterIsProdOnly) {
+        openDevMonitor(p);
+    } else {
+        openProjectModal(p);
+    }
+}
+
+// --- Dev Monitor ---
+
+/**
+ * Memory bar: green < 50%, yellow 50-80%, red > 80% of maxMemory.
+ * Falls back to absolute thresholds when maxMemory is unknown.
+ */
+function dmMemBarClass(bytes, maxBytes) {
+    if (!bytes) return 'ok';
+    const pct = maxBytes ? (bytes / maxBytes * 100) : 0;
+    if (pct >= 80) return 'crit';
+    if (pct >= 50) return 'warn';
+    return 'ok';
+}
+
+function buildDmServiceCard(s, projectName) {
+    const isActive = !!s.active;
+    const dotCls = isActive ? 'active' : 'inactive';
+    const memBytes = s.memory || 0;
+    // Use 512 MB as reference max for bar visualisation when we lack host info
+    const maxRef = 512 * 1024 * 1024;
+    const memPct = memBytes ? Math.min((memBytes / maxRef) * 100, 100) : 0;
+    const barCls = memBytes ? (memPct >= 80 ? 'crit' : memPct >= 50 ? 'warn' : 'ok') : 'ok';
+    const memLabel = memBytes ? formatBytes(memBytes) : '';
+
+    const stopStartBtn = isActive
+        ? `<button class="dm-svc-btn danger" data-dm-svc-action="stop" data-dm-svc="${escapeHtml(s.name)}" data-dm-project="${escapeHtml(projectName)}">
+               <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+           </button>`
+        : `<button class="dm-svc-btn primary" data-dm-svc-action="start" data-dm-svc="${escapeHtml(s.name)}" data-dm-project="${escapeHtml(projectName)}">
+               <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+           </button>`;
+
+    return `
+        <div class="dm-svc-card ${isActive ? 'active' : 'inactive'}" data-dm-card="${escapeHtml(s.name)}">
+            <div class="dm-svc-top">
+                <span class="dm-svc-dot ${dotCls}"></span>
+                <span class="dm-svc-name">${escapeHtml(s.name)}</span>
+                ${memLabel ? `<span class="dm-svc-mem">${escapeHtml(memLabel)}</span>` : ''}
+            </div>
+            <div class="dm-svc-bar-wrap">
+                <div class="dm-svc-bar">
+                    <div class="dm-svc-bar-fill ${barCls}" style="width:${memPct.toFixed(1)}%"></div>
+                </div>
+                <span class="dm-svc-state ${dotCls}">${isActive ? '' : ''}</span>
+            </div>
+            <div class="dm-svc-actions">
+                ${stopStartBtn}
+                <button class="dm-svc-btn" data-dm-svc-action="restart" data-dm-svc="${escapeHtml(s.name)}" data-dm-project="${escapeHtml(projectName)}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+            </div>
+        </div>`;
+}
+
+function dmBuildInfoBar(p) {
+    const items = [];
+    if (p.host || p.vm) items.push({ label: 'Host', value: escapeHtml(p.host || p.vm || 'VM100') });
+    if (p.local_api) items.push({ label: 'API', value: `<a href="${escapeHtml(p.local_api)}" target="_blank">${escapeHtml(p.local_api)}</a>` });
+    if (p.local_web) items.push({ label: 'WEB', value: `<a href="${escapeHtml(p.local_web)}" target="_blank">${escapeHtml(p.local_web)}</a>` });
+    if (p.api_url) items.push({ label: 'PROD API', value: `<a href="${escapeHtml(p.api_url)}" target="_blank">${escapeHtml(p.api_url.replace('https://',''))}</a>` });
+    if (p.web_url) items.push({ label: 'PROD WEB', value: `<a href="${escapeHtml(p.web_url)}" target="_blank">${escapeHtml(p.web_url.replace('https://',''))}</a>` });
+    if (p.memory_total) items.push({ label: 'RAM', value: escapeHtml(formatBytes(p.memory_total)) });
+    return items.map(i => `<span class="dm-info-item"><span class="dm-info-label">${i.label}</span><span class="dm-info-val">${i.value}</span></span>`).join('');
+}
+
+function openDevMonitor(p) {
+    state.devMonitor.open = true;
+    state.devMonitor.project = p;
+    state.devMonitor.activeService = (p.services && p.services.length) ? p.services[0].name : null;
+
+    const overlay = document.getElementById('devMonitor');
+    if (!overlay) return;
+
+    // Logo
+    const logoEl = document.getElementById('dmLogo');
+    const logo = getProjectLogo(p.name);
+    if (logo) {
+        logoEl.innerHTML = logo;
+        logoEl.style.cssText = 'width:32px;height:32px;display:flex;flex-shrink:0';
+    } else {
+        logoEl.textContent = getIcon(p.icon);
+        logoEl.style.cssText = 'font-size:24px';
+    }
+
+    // Name / status
+    document.getElementById('dmProjectName').textContent = p.name;
+    const badge = document.getElementById('dmStatusBadge');
+    badge.textContent = t(p.status);
+    badge.className = 'dm-status-badge badge ' + p.status;
+
+    document.getElementById('dmProjectDesc').textContent = p.purpose || p.description || '';
+
+    // Button labels
+    document.getElementById('dmRestartAllLabel').textContent = t('restart_all');
+    document.getElementById('dmStopAllLabel').textContent = t('stop_all');
+    document.getElementById('dmRefreshLabel').textContent = t('refresh');
+    document.getElementById('dmAutoScrollLabel').textContent = t('auto_scroll');
+    document.getElementById('dmLinesLabel').textContent = t('log_lines') + ':';
+
+    // Services grid
+    const grid = document.getElementById('dmServicesGrid');
+    if (p.services && p.services.length) {
+        grid.innerHTML = p.services.map(s => buildDmServiceCard(s, p.name)).join('');
+    } else {
+        grid.innerHTML = '<div class="dm-no-services">Нет сервисов</div>';
+    }
+
+    // Info bar
+    document.getElementById('dmInfoBar').innerHTML = dmBuildInfoBar(p);
+
+    // Log tabs
+    const tabsEl = document.getElementById('dmLogsTabs');
+    if (p.services && p.services.length) {
+        tabsEl.innerHTML = p.services.map((s, i) =>
+            `<button class="dm-log-tab ${i === 0 ? 'active' : ''}" data-svc="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`
+        ).join('');
+    } else {
+        tabsEl.innerHTML = `<button class="dm-log-tab active" data-svc="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`;
+        state.devMonitor.activeService = p.name;
+    }
+
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    dmFetchLogs();
+}
+
+function closeDevMonitor() {
+    state.devMonitor.open = false;
+    state.devMonitor.project = null;
+    document.getElementById('devMonitor')?.classList.add('hidden');
+    document.body.style.overflow = '';
+    if (state.devMonitor._pollTimer) {
+        clearTimeout(state.devMonitor._pollTimer);
+        state.devMonitor._pollTimer = null;
+    }
+}
+
+async function dmFetchLogs() {
+    const { project, activeService, lines } = state.devMonitor;
+    if (!project || !activeService) return;
+
+    const content = document.getElementById('dmLogsContent');
+    if (!content) return;
+
+    if (!content.textContent) content.textContent = t('loading_logs');
+
+    try {
+        const svc = encodeURIComponent(activeService);
+        const proj = encodeURIComponent(project.name);
+        const res = await fetch(`/api/projects/${proj}/logs?service=${svc}&lines=${lines}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const text = data.lines || data.output || data.log || '';
+        content.textContent = text || t('no_logs');
+    } catch (e) {
+        content.textContent = `Error: ${e.message}`;
+    }
+
+    if (state.devMonitor.autoScroll) {
+        const body = document.getElementById('dmLogsBody');
+        if (body) body.scrollTop = body.scrollHeight;
+    }
+}
+
+async function dmServiceControl(projectName, serviceName, action) {
+    if (action === 'stop') {
+        if (!confirm(`Stop ${serviceName}?`)) return;
+    }
+    try {
+        const proj = encodeURIComponent(projectName);
+        const svc = encodeURIComponent(serviceName);
+        const res = await fetch(`/api/projects/${proj}/${action}?service=${svc}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true, service: serviceName }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+        showActionToast(`${escapeHtml(serviceName)}: ${action} \u2713`, false);
+    } catch (e) {
+        showActionToast(`${escapeHtml(serviceName)}: ${action} \u2014 ${e.message}`, true);
+    }
+}
+
+function initDevMonitor() {
+    const overlay = document.getElementById('devMonitor');
+    if (!overlay) return;
+
+    // Close button
+    document.getElementById('dmClose')?.addEventListener('click', closeDevMonitor);
+
+    // Backdrop click
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeDevMonitor();
+    });
+
+    // Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && state.devMonitor.open) {
+            e.preventDefault();
+            closeDevMonitor();
+        }
+    });
+
+    // Restart All
+    document.getElementById('dmRestartAll')?.addEventListener('click', async () => {
+        const p = state.devMonitor.project;
+        if (!p) return;
+        if (!confirm(`${t('restart_all')} — ${p.name}?`)) return;
+        await projectControl(p.name, 'restart');
+    });
+
+    // Stop All
+    document.getElementById('dmStopAll')?.addEventListener('click', async () => {
+        const p = state.devMonitor.project;
+        if (!p) return;
+        if (!confirm(`${t('stop_all')} — ${p.name}?`)) return;
+        await projectControl(p.name, 'stop');
+    });
+
+    // Refresh logs
+    document.getElementById('dmRefreshLogs')?.addEventListener('click', dmFetchLogs);
+
+    // Auto-scroll toggle
+    document.getElementById('dmAutoScroll')?.addEventListener('change', (e) => {
+        state.devMonitor.autoScroll = e.target.checked;
+    });
+
+    // Lines selector
+    overlay.addEventListener('click', (e) => {
+        const btn = e.target.closest('.dm-lines-btn');
+        if (!btn) return;
+        overlay.querySelectorAll('.dm-lines-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.devMonitor.lines = parseInt(btn.dataset.lines) || 50;
+        dmFetchLogs();
+    });
+
+    // Log tab click
+    overlay.addEventListener('click', (e) => {
+        const tab = e.target.closest('.dm-log-tab');
+        if (!tab) return;
+        overlay.querySelectorAll('.dm-log-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        state.devMonitor.activeService = tab.dataset.svc;
+        document.getElementById('dmLogsContent').textContent = '';
+        dmFetchLogs();
+    });
+
+    // Service card actions (stop/start/restart per service)
+    overlay.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-dm-svc-action]');
+        if (!btn) return;
+        e.stopPropagation();
+        const action = btn.dataset.dmSvcAction;
+        const svc = btn.dataset.dmSvc;
+        const proj = btn.dataset.dmProject;
+        if (!action || !svc || !proj) return;
+        dmServiceControl(proj, svc, action);
+    });
+}
+
 // --- Project Detail Modal ---
 function openProjectModal(p) {
     const modal = document.getElementById('projectDetailModal');
@@ -1723,11 +2020,15 @@ function initProjectControls() {
         if (!project) return;
 
         if (action === 'logs') {
-            // Find current project data for service list
+            // Open Dev Monitor (replaces old logs modal)
             const projectData = state.data && state.data.projects
                 ? state.data.projects.find(p => p.name === project)
                 : null;
-            openLogsModal(project, projectData ? projectData.services : null);
+            if (projectData) {
+                openDevMonitor(projectData);
+            } else {
+                openLogsModal(project, null);
+            }
             return;
         }
 
@@ -2154,6 +2455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSshCopyButtons();
     initProjectControls();
     initLogsModal();
+    initDevMonitor();
     applyI18n();
     connect();
 });
