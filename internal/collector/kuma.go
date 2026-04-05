@@ -128,6 +128,8 @@ func (k *KumaCollector) Collect() ([]KumaMonitorStatus, error) {
 	return results, nil
 }
 
+const maxKumaResponseBytes = 2 * 1024 * 1024 // 2 MB
+
 func (k *KumaCollector) fetch(url string) ([]byte, error) {
 	resp, err := k.client.Get(url)
 	if err != nil {
@@ -139,5 +141,5 @@ func (k *KumaCollector) fetch(url string) ([]byte, error) {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, maxKumaResponseBytes))
 }

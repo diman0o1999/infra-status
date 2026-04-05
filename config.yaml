@@ -2,6 +2,7 @@ server:
   port: 3301
   refresh_interval: 10s
   env: dev
+  auth_token: ""  # set a secret token to protect mutating endpoints (start/stop/restart/reload/chat)
   allowed_origins:
     - "*"  # dev mode — restrict to specific origins in production
 

@@ -21,6 +21,7 @@ type Collector struct {
 	mu       sync.RWMutex
 	state    models.Dashboard
 	onChange func(models.Dashboard)
+	stopOnce sync.Once
 }
 
 func New(cfg *config.Config, cfgPath string) *Collector {
@@ -356,7 +357,9 @@ func (c *Collector) collectDomains() []models.DomainInfo {
 }
 
 func (c *Collector) Stop() {
-	c.ssh.Close()
+	c.stopOnce.Do(func() {
+		c.ssh.Close()
+	})
 }
 
 // RunServiceAction delegates to the SSH collector to execute a systemctl action

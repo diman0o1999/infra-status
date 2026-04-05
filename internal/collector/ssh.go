@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -29,6 +30,7 @@ const (
 
 type SSHCollector struct {
 	hosts   []config.HostConfig
+	mu      sync.Mutex // protects clients map
 	clients map[string]*ssh.Client
 }
 
@@ -40,6 +42,9 @@ func NewSSHCollector(hosts []config.HostConfig) *SSHCollector {
 }
 
 func (c *SSHCollector) getClient(host config.HostConfig) (*ssh.Client, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if client, ok := c.clients[host.Name]; ok {
 		// Test if connection is still alive
 		_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
@@ -73,7 +78,10 @@ func (c *SSHCollector) getClient(host config.HostConfig) (*ssh.Client, error) {
 		Timeout:         5 * time.Second,
 	}
 
+	// Unlock during dial to avoid holding the lock during network I/O
+	c.mu.Unlock()
 	client, err := ssh.Dial("tcp", host.Host+":22", cfg)
+	c.mu.Lock()
 	if err != nil {
 		return nil, fmt.Errorf("ssh dial %s: %w", host.Host, err)
 	}
@@ -96,6 +104,19 @@ func (c *SSHCollector) runCommand(client *ssh.Client, cmd string) (string, error
 	return strings.TrimSpace(string(out)), nil
 }
 
+// cmdBatchMetrics combines all host metric commands into a single SSH round-trip.
+// Sections are delimited by unique markers so the output can be split and parsed.
+const (
+	batchSep       = "###SEP###"
+	cmdBatchHost   = cmdCPUUsage + ` && echo '` + batchSep + `' && ` +
+		cmdRAMUsage + ` && echo '` + batchSep + `' && ` +
+		cmdDiskUsage + ` && echo '` + batchSep + `' && ` +
+		cmdLoadAvg + ` && echo '` + batchSep + `' && ` +
+		cmdUptime + ` && echo '` + batchSep + `' && ` +
+		cmdSwapUsage + ` && echo '` + batchSep + `' && ` +
+		cmdProcCount
+)
+
 func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 	m := models.HostMetrics{
 		Name:        host.Name,
@@ -112,84 +133,57 @@ func (c *SSHCollector) CollectHost(host config.HostConfig) models.HostMetrics {
 
 	m.Online = true
 
-	// CPU usage (average across cores)
-	cpuOut, err := c.runCommand(client, cmdCPUUsage)
+	// Single SSH round-trip for all basic metrics
+	batchOut, err := c.runCommand(client, cmdBatchHost)
 	if err == nil {
-		if v, e := strconv.ParseFloat(strings.Replace(cpuOut, ",", ".", 1), 64); e == nil {
-			m.CPU = v
-		}
-	}
-
-	// RAM
-	ramOut, err := c.runCommand(client, cmdRAMUsage)
-	if err == nil {
-		parts := strings.Fields(ramOut)
-		if len(parts) == 2 {
-			total, _ := strconv.ParseUint(parts[0], 10, 64)
-			used, _ := strconv.ParseUint(parts[1], 10, 64)
-			m.RAM = models.RAMInfo{
-				Total:   total,
-				Used:    used,
-				Percent: float64(used) / float64(total) * 100,
+		sections := strings.Split(batchOut, batchSep)
+		if len(sections) >= 7 {
+			// CPU
+			cpuStr := strings.TrimSpace(sections[0])
+			if v, e := strconv.ParseFloat(strings.Replace(cpuStr, ",", ".", 1), 64); e == nil {
+				m.CPU = v
 			}
-		}
-	}
-
-	// Disk
-	diskOut, err := c.runCommand(client, cmdDiskUsage)
-	if err == nil {
-		parts := strings.Fields(diskOut)
-		if len(parts) == 2 {
-			total, _ := strconv.ParseUint(parts[0], 10, 64)
-			used, _ := strconv.ParseUint(parts[1], 10, 64)
-			m.Disk = models.DiskInfo{
-				Total:   total,
-				Used:    used,
-				Percent: float64(used) / float64(total) * 100,
-			}
-		}
-	}
-
-	// Load average
-	loadOut, err := c.runCommand(client, cmdLoadAvg)
-	if err == nil {
-		m.Load = loadOut
-	}
-
-	// Uptime
-	uptimeOut, err := c.runCommand(client, cmdUptime)
-	if err == nil {
-		m.Uptime = strings.TrimPrefix(uptimeOut, "up ")
-	}
-
-	// Thermal (CPU package temp, fans) — only for bare-metal proxmox hosts
-	if host.Type == "proxmox" {
-		m.Thermal = c.collectThermal(client)
-	}
-
-	// Swap usage
-	swapOut, err := c.runCommand(client, cmdSwapUsage)
-	if err == nil {
-		parts := strings.Fields(swapOut)
-		if len(parts) == 2 {
-			total, _ := strconv.ParseUint(parts[0], 10, 64)
-			used, _ := strconv.ParseUint(parts[1], 10, 64)
-			if total > 0 {
-				m.Swap = models.SwapInfo{
-					Total:   total,
-					Used:    used,
-					Percent: float64(used) / float64(total) * 100,
+			// RAM
+			ramParts := strings.Fields(strings.TrimSpace(sections[1]))
+			if len(ramParts) == 2 {
+				total, _ := strconv.ParseUint(ramParts[0], 10, 64)
+				used, _ := strconv.ParseUint(ramParts[1], 10, 64)
+				if total > 0 {
+					m.RAM = models.RAMInfo{Total: total, Used: used, Percent: float64(used) / float64(total) * 100}
 				}
 			}
+			// Disk
+			diskParts := strings.Fields(strings.TrimSpace(sections[2]))
+			if len(diskParts) == 2 {
+				total, _ := strconv.ParseUint(diskParts[0], 10, 64)
+				used, _ := strconv.ParseUint(diskParts[1], 10, 64)
+				if total > 0 {
+					m.Disk = models.DiskInfo{Total: total, Used: used, Percent: float64(used) / float64(total) * 100}
+				}
+			}
+			// Load
+			m.Load = strings.TrimSpace(sections[3])
+			// Uptime
+			m.Uptime = strings.TrimPrefix(strings.TrimSpace(sections[4]), "up ")
+			// Swap
+			swapParts := strings.Fields(strings.TrimSpace(sections[5]))
+			if len(swapParts) == 2 {
+				total, _ := strconv.ParseUint(swapParts[0], 10, 64)
+				used, _ := strconv.ParseUint(swapParts[1], 10, 64)
+				if total > 0 {
+					m.Swap = models.SwapInfo{Total: total, Used: used, Percent: float64(used) / float64(total) * 100}
+				}
+			}
+			// Procs
+			if v, e := strconv.Atoi(strings.TrimSpace(sections[6])); e == nil {
+				m.Procs = v
+			}
 		}
 	}
 
-	// Process count
-	procsOut, err := c.runCommand(client, cmdProcCount)
-	if err == nil {
-		if v, e := strconv.Atoi(strings.TrimSpace(procsOut)); e == nil {
-			m.Procs = v
-		}
+	// Thermal — separate command because sensors output is complex and may not exist
+	if host.Type == "proxmox" {
+		m.Thermal = c.collectThermal(client)
 	}
 
 	// Determine status based on thresholds
@@ -513,7 +507,10 @@ func parseTempValue(line string) float64 {
 }
 
 func (c *SSHCollector) Close() {
-	for _, client := range c.clients {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for name, client := range c.clients {
 		client.Close()
+		delete(c.clients, name)
 	}
 }

@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ var webFS embed.FS
 type Server struct {
 	port           int
 	allowedOrigins []string
+	authToken      string // if set, mutating endpoints require Bearer token
 	collector      *collector.Collector
 	clients        map[chan models.Dashboard]struct{}
 	mu             sync.Mutex
@@ -28,6 +31,7 @@ type Server struct {
 	ollamaModel    string
 	ollamaOn       bool
 	httpClient     *http.Client
+	httpServer     *http.Server // for graceful shutdown
 }
 
 func New(cfg *config.Config, col *collector.Collector) *Server {
@@ -46,12 +50,13 @@ func New(cfg *config.Config, col *collector.Collector) *Server {
 	return &Server{
 		port:           cfg.Server.Port,
 		allowedOrigins: origins,
+		authToken:      cfg.Server.AuthToken,
 		collector:      col,
 		clients:        make(map[chan models.Dashboard]struct{}),
 		ollamaURL:      cfg.Ollama.URL,
 		ollamaModel:    cfg.Ollama.Model,
 		ollamaOn:       cfg.Ollama.Enabled,
-		httpClient:     &http.Client{Transport: transport, Timeout: 0}, // 0 = no timeout for streaming
+		httpClient:     &http.Client{Transport: transport, Timeout: 120 * time.Second},
 	}
 }
 
@@ -77,6 +82,23 @@ func (s *Server) setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// requireAuth checks the Bearer token for mutating endpoints.
+// If no auth_token is configured, all requests are allowed (dev mode).
+func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.authToken == "" {
+			next(w, r)
+			return
+		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer "+s.authToken {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+		next(w, r)
+	}
+}
+
 func (s *Server) Broadcast(d models.Dashboard) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -92,26 +114,24 @@ func (s *Server) Broadcast(d models.Dashboard) {
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	// Health check
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
+	// Health check — deep: reports last collection age
+	mux.HandleFunc("/health", s.handleHealth)
 
-	// SSE endpoint
+	// SSE endpoint (read-only, no auth)
 	mux.HandleFunc("/sse", s.handleSSE)
 
-	// API endpoint (one-shot JSON snapshot)
+	// API endpoint (read-only, no auth)
 	mux.HandleFunc("/api/status", s.handleAPI)
 
-	// Config hot-reload
-	mux.HandleFunc("/api/reload", s.handleReload)
+	// Config hot-reload (mutating — requires auth)
+	mux.HandleFunc("/api/reload", s.requireAuth(s.handleReload))
 
 	// Service control: start / stop / restart / logs
-	// Registered as a prefix so /api/projects/{name}/{action} is routed here.
-	mux.HandleFunc("/api/projects/", s.handleProjectRoute)
+	// logs is GET (read-only) but start/stop/restart are POST — auth checked inside
+	mux.HandleFunc("/api/projects/", s.handleProjectRouteWithAuth)
 
-	// AI Chat (RAG over infra state)
-	mux.HandleFunc("/api/chat", s.handleChat)
+	// AI Chat (mutating — requires auth to prevent abuse)
+	mux.HandleFunc("/api/chat", s.requireAuth(s.handleChat))
 
 	// Static files (embedded)
 	webContent, err := fs.Sub(webFS, "web")
@@ -121,8 +141,61 @@ func (s *Server) Start() error {
 	mux.Handle("/", http.FileServer(http.FS(webContent)))
 
 	addr := fmt.Sprintf(":%d", s.port)
+	s.httpServer = &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 120 * time.Second, // long for SSE/chat streaming
+		IdleTimeout:  120 * time.Second,
+	}
+
 	slog.Info("server starting", "addr", addr)
-	return http.ListenAndServe(addr, mux)
+	return s.httpServer.ListenAndServe()
+}
+
+// Shutdown gracefully stops the HTTP server.
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpServer != nil {
+		return s.httpServer.Shutdown(ctx)
+	}
+	return nil
+}
+
+// handleProjectRouteWithAuth applies auth only to mutating actions (start/stop/restart).
+func (s *Server) handleProjectRouteWithAuth(w http.ResponseWriter, r *http.Request) {
+	// Extract action from path to decide if auth is needed
+	suffix := strings.TrimPrefix(r.URL.Path, "/api/projects/")
+	suffix = strings.Trim(suffix, "/")
+	parts := strings.SplitN(suffix, "/", 2)
+	if len(parts) == 2 {
+		switch parts[1] {
+		case "start", "stop", "restart":
+			if s.authToken != "" {
+				auth := r.Header.Get("Authorization")
+				if auth != "Bearer "+s.authToken {
+					writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+					return
+				}
+			}
+		}
+	}
+	s.handleProjectRoute(w, r)
+}
+
+// handleHealth reports server health including last collection staleness.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	state := s.collector.State()
+	stale := time.Since(state.UpdatedAt).Seconds()
+	status := "ok"
+	if stale > 60 {
+		status = "degraded"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":         status,
+		"last_update_sec": int(stale),
+		"hosts":          len(state.Hosts),
+		"projects":       len(state.Projects),
+	})
 }
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +234,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 	flusher.Flush()
 
-	// Stream subsequent updates
+	// Stream subsequent updates with periodic heartbeat
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
+
 	for {
 		select {
 		case d := <-ch:
@@ -171,6 +247,11 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			if _, err := fmt.Fprintf(w, ": ping\n\n"); err != nil {
 				return
 			}
 			flusher.Flush()

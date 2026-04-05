@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"infra-status/internal/collector"
 	"infra-status/internal/config"
@@ -37,8 +41,6 @@ func main() {
 	)
 
 	col := collector.New(cfg, *configPath)
-	defer col.Stop()
-
 	srv := server.New(cfg, col)
 
 	// Wire SSE broadcasts
@@ -49,17 +51,27 @@ func main() {
 	col.Start()
 
 	// Graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
 		slog.Info("shutting down", "signal", sig.String())
+
+		// Give active connections 5 seconds to drain
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(ctx); err != nil {
+			slog.Error("server shutdown error", "error", err)
+		}
 		col.Stop()
-		os.Exit(0)
 	}()
 
-	if err := srv.Start(); err != nil {
+	if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server error", "error", err)
 		os.Exit(1)
 	}
+
+	slog.Info("server stopped")
 }
